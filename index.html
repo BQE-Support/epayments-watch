@@ -414,6 +414,26 @@
       </div>
     </div>
 
+    <div data-section="disputesSection" id="disputesSection">
+      <div class="section-head">
+        <h2 class="hero-title">Disputes &amp; ACH returns</h2>
+        <span class="section-note" id="disputesNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <div class="esc-tiles" id="disputesTiles"></div>
+        <div style="margin-top:16px;"><div class="kpi-label">Open disputes</div><div class="table-wrap" id="disputesOpen" style="margin-top:6px;"></div></div>
+        <div style="margin-top:16px;"><div class="kpi-label">ACH returns, last 7 days</div><div class="table-wrap" id="returnsList" style="margin-top:6px;"></div></div>
+        <details class="review-history" style="margin-top:16px;">
+          <summary id="returnsBySummary">ACH returns by customer, last 60 days</summary>
+          <div class="table-wrap" style="margin-top:8px;" id="returnsByMerchant"></div>
+        </details>
+        <details class="review-history" style="margin-top:16px;">
+          <summary id="disputesHistorySummary">Closed disputes</summary>
+          <div class="table-wrap" style="margin-top:8px;" id="disputesHistory"></div>
+        </details>
+      </div>
+    </div>
+
     <div data-section="processorSection" id="processorSection">
       <div class="section-head">
         <h2 class="section-title">From Payrix / Worldpay</h2>
@@ -565,6 +585,14 @@
           </ul>
         </div>
         <div>
+          <h4>Disputes &amp; ACH returns</h4>
+          <ul>
+            <li>The same lists as the Payrix portal's Notifications page, read from the Payrix API every hour (read-only). Disputes are Payrix chargebacks; "Reply by" is the portal's End Date. Closed disputes show the last 120 days.</li>
+            <li>ACH returns are ACH payments Payrix marked returned, with the bank's return reason (for example "R03: No Account/Unable to Locate Account"). The last 7 days are listed one by one; the last 60 days are grouped by customer, customers with an open ePayments ticket first.</li>
+            <li>Open tickets are matched the same way as the merchant check. A ticket gets an "Open dispute" chip while its customer has one open, and an "ACH return" chip for 14 days after a return.</li>
+          </ul>
+        </div>
+        <div>
           <h4>From Payrix / Worldpay</h4>
           <ul>
             <li>Tickets whose requester email is at wp4p.zendesk.com (Payrix Boarding and Risk), payrix.helpscoutapp.com, payrix.com, worldpay.com, globalpay.com or globalpayments.com. These are requests from the processor to BQE.</li>
@@ -622,7 +650,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.0</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.1</footer>
     </div>
   </div>
 </div>
@@ -718,6 +746,18 @@
   function merchantDay(s) { return (/T00:00:00(\.0+)?(Z|\+00:00)$/.test(s) ? utcDayFmt : ptDayFmt).format(new Date(s)); }
   function merchantName(m) { return m[0] || m[1] || "(no name)"; }
   // "open__researching_issue_" -> "Open: Researching issue" (Ticket Status Detail values)
+  // Disputes / ACH returns for a ticket's merchants: open disputes, and the newest return in the last RETURN_CHIP_DAYS days.
+  var RETURN_CHIP_DAYS = 14;
+  function merchantActivity(r) {
+    var ids = {}; (r[RC.merchants] || []).forEach(function (id) { ids[id] = 1; });
+    var out = { openDisputes: 0, recentReturns: null };
+    ((DATA && DATA.disputes) || []).forEach(function (d) { if (ids[d[1]] && d[6] === "open") out.openDisputes++; });
+    ((DATA && DATA.returns) || []).forEach(function (x) {
+      var days = x[4] ? (NOW - Date.parse(x[4] + "T12:00:00Z")) / 86400000 : null;
+      if (ids[x[1]] && days !== null && days <= RETURN_CHIP_DAYS && !out.recentReturns) out.recentReturns = { ago: days < 1 ? "today" : Math.round(days) + "d ago" };
+    });
+    return out;
+  }
   function detailLabel(v) {
     if (!v) return "(none)";
     return String(v).split("__").map(function (p) {
@@ -774,6 +814,9 @@
       var p = merchantProblem(x[1]);
       f.push({ key: "merchant:" + x[0], label: "Payrix: " + (p || MERCHANT_STATUS[x[1][2]] || "status " + x[1][2]), cls: p ? "chip-merchant-bad" : "chip-merchant" });
     });
+    var act = merchantActivity(r);
+    if (act.openDisputes) f.push({ key: "dispute", label: act.openDisputes === 1 ? "Open dispute" : act.openDisputes + " open disputes", cls: "chip-noreply" });
+    if (act.recentReturns) f.push({ key: "return", label: "ACH return " + act.recentReturns.ago, cls: "chip-awaiting" });
     if (!r[RC.inGroup] && r[RC.group]) f.push({ key: "group", label: "In " + r[RC.group], cls: "chip-group" });
     if (!r[RC.commentsKnown]) f.push({ key: "pending", label: "Comments not read yet", cls: "chip-pending" });
     return f;
@@ -979,6 +1022,7 @@
       { key: "backforth", label: "Heavy back-and-forth", value: fmtNum(backforth.length), sub: "10+ comments, not urgent by itself" + (backforthAll.length > backforth.length ? " · " + (backforthAll.length - backforth.length) + " reviewed this week" : "") },
       { key: "payrix", label: "Escalated to Payrix", value: fmtNum(payrixRows.length), sub: "waiting on Payrix" },
       { key: "processor", label: "From Payrix / Worldpay", value: fmtNum(processorRows.length), sub: "Boarding, Risk and other processor mail" },
+      { key: "disputes", label: "Open disputes", value: fmtNum(((DATA && DATA.disputes) || []).filter(function (d) { return d[6] === "open"; }).length), sub: "Payrix chargebacks awaiting a reply", scrollTo: "disputesSection", crit: ((DATA && DATA.disputes) || []).some(function (d) { return d[6] === "open"; }) },
       { key: "merchant", label: "Merchant needs a look", value: fmtNum(merchantRows.length), sub: "frozen, closed, inactive or idle " + IDLE_DAYS + "d+", crit: merchantRows.length > 0 },
       { key: "gal", label: "With Dev Team (GAL)", value: fmtNum(galRows.length), sub: (ROWS.length ? Math.round(galRows.length / ROWS.length * 100) : 0) + "% of open" },
       { key: "outside", label: "Outside the ePayment group", value: fmtNum(outsideRows.length), sub: "ePayments module, other groups" },
@@ -1505,6 +1549,85 @@
       }).join("") + '</tbody></table>' : '<div class="panel-empty">No tickets escalated to Payrix in the last 180 days.</div>';
   }
 
+  // ---- Disputes (Payrix chargebacks) and ACH returns, the Payrix portal's Notifications page ----
+  // ep_board() disputes: [0 id, 1 merchant, 2 total (cents), 3 cycle, 4 reason, 5 replyBy, 6 status, 7 actionable, 8 created, 9 modified, 10 txn]
+  // ep_board() returns:  [0 txn id, 1 merchant, 2 total (cents), 3 orderRef, 4 returned, 5 reason, 6 created]
+  var dayFmtUTC = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "numeric", day: "numeric", year: "2-digit" });
+  function fmtDay(d) { return d ? dayFmtUTC.format(new Date(d + (String(d).length === 10 ? "T12:00:00Z" : ""))) : "n/a"; }
+  function money(c) { return c === null || c === undefined ? "n/a" : "$" + (c / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function merchantCell(id) {
+    var m = ((DATA && DATA.merchants) || {})[id];
+    return (m ? escapeHtml(merchantName(m)) : '<span class="review-by">' + escapeHtml(id || "unknown merchant") + '</span>') +
+      (m && m[1] && m[1] !== m[0] ? '<div class="review-by">' + escapeHtml(m[1]) + '</div>' : '');
+  }
+  // Open ePayments tickets for a merchant (same match as the merchant check).
+  function ticketsForMerchant(id) {
+    var rows = ROWS.filter(function (r) { return (r[RC.merchants] || []).indexOf(id) !== -1; });
+    return rows.length ? rows.map(function (r) { return ticketLink(r); }).join(" ") : '<span class="review-by">none open</span>';
+  }
+  // Whole calendar days from today (Pacific) to a yyyy-mm-dd date: 0 = today, negative = past.
+  function daysUntil(d) { return d ? Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(ptDateFmt.format(new Date(NOW)) + "T00:00:00Z")) / 86400000) : null; }
+  function renderDisputesSection() {
+    var ds = (DATA && DATA.disputes) || [], rs = (DATA && DATA.returns) || [];
+    var open = ds.filter(function (d) { return d[6] === "open"; }).sort(function (a, b) { return String(a[5]).localeCompare(String(b[5])); });
+    var closed = ds.filter(function (d) { return d[6] !== "open"; });
+    var lost = closed.filter(function (d) { return d[6] === "lost"; }), won = closed.filter(function (d) { return d[6] === "won"; });
+    var r30 = rs.filter(function (x) { return x[4] && (NOW - Date.parse(x[4] + "T12:00:00Z")) / 86400000 <= 30; });
+    var nextDue = open.length ? daysUntil(open[0][5]) : null;
+    function sum(list) { return list.reduce(function (s, d) { return s + (d[2] || 0); }, 0); }
+    var tiles = [
+      { label: "Open disputes", value: fmtNum(open.length), sub: open.length ? money(sum(open)) + " disputed" : "nothing waiting", crit: open.length > 0 },
+      { label: "Next reply due", value: nextDue === null ? "n/a" : (nextDue <= 0 ? "Today" : nextDue + "d"), sub: open.length ? fmtDay(open[0][5]) : "no open disputes", crit: nextDue !== null && nextDue <= 7 },
+      { label: "Lost, 120 days", value: fmtNum(lost.length), sub: money(sum(lost)) },
+      { label: "Won, 120 days", value: fmtNum(won.length), sub: money(sum(won)) },
+      { label: "ACH returns, 7 days", value: fmtNum(rs.filter(function (x) { return x[4] && (NOW - Date.parse(x[4] + "T12:00:00Z")) / 86400000 <= 7; }).length), sub: "full list below" },
+      { label: "ACH returns, 30 days", value: fmtNum(r30.length), sub: money(sum(r30)) + " returned" }
+    ];
+    document.getElementById("disputesTiles").innerHTML = tiles.map(function (t) {
+      return '<div class="q-tile"><div class="kpi-label">' + t.label + '</div><div class="kpi-value' + (t.crit ? " crit" : "") + '">' + t.value + '</div><div class="kpi-sub">' + t.sub + '</div></div>';
+    }).join("");
+    var act = (DATA && DATA.sync && DATA.sync.payrix_activity) || null;
+    document.getElementById("disputesNote").textContent = "From the Payrix API, same as the portal's Notifications page" +
+      (act && act.finished ? " · synced " + ptDayFmt.format(new Date(act.finished)) + " " + fmtClock(Date.parse(act.finished)) : act && act.error ? " · last sync failed: " + act.error : "") + " · refreshed hourly";
+    function disputeRows(list, showDue) {
+      return '<table class="call-table"><thead><tr><th>Dispute</th><th>Merchant</th><th>Amount</th><th>Reason</th><th>' + (showDue ? "Reply by" : "Status") + '</th><th>Open tickets</th></tr></thead><tbody>' +
+        list.map(function (d) {
+          var due = daysUntil(d[5]);
+          var last = showDue
+            ? fmtDay(d[5]) + (due !== null ? '<div class="review-by"' + (due <= 7 ? ' style="color:var(--critical);font-weight:700;"' : '') + '>' + (due < 0 ? Math.abs(due) + "d past" : due === 0 ? "today" : due + "d left") + '</div>' : '')
+            : '<span class="chip ' + (d[6] === "won" ? "chip-merchant" : d[6] === "lost" ? "chip-merchant-bad" : "chip-group") + '">' + escapeHtml(d[6] || "") + '</span><div class="review-by">opened ' + fmtDay(String(d[8] || "").slice(0, 10)) + '</div>';
+          return '<tr><td style="font-variant-numeric:tabular-nums;">' + escapeHtml(d[0]) + '<div class="review-by">' + escapeHtml(d[3] || "") + ' cycle</div></td>' +
+            '<td>' + merchantCell(d[1]) + '</td><td style="font-variant-numeric:tabular-nums;">' + money(d[2]) + '</td>' +
+            '<td>' + escapeHtml(d[4] || "") + '</td><td>' + last + '</td><td>' + ticketsForMerchant(d[1]) + '</td></tr>';
+        }).join("") + '</tbody></table>';
+    }
+    document.getElementById("disputesOpen").innerHTML = open.length ? disputeRows(open, true) : '<div class="panel-empty">No open disputes right now.</div>';
+    var r7 = rs.filter(function (x) { return x[4] && (NOW - Date.parse(x[4] + "T12:00:00Z")) / 86400000 <= 7; });
+    document.getElementById("returnsList").innerHTML = r7.length ? '<table class="call-table"><thead><tr><th>Returned</th><th>Merchant</th><th>Amount</th><th>Reason</th><th>Payment</th><th>Open tickets</th></tr></thead><tbody>' +
+      r7.map(function (x) {
+        return '<tr><td>' + fmtDay(x[4]) + '</td><td>' + merchantCell(x[1]) + '</td><td style="font-variant-numeric:tabular-nums;">' + money(x[2]) + '</td>' +
+          '<td>' + escapeHtml(x[5] || "reason not given") + '</td><td>' + escapeHtml(x[3] || "") + '<div class="review-by">' + escapeHtml(x[0]) + '</div></td><td>' + ticketsForMerchant(x[1]) + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<div class="panel-empty">No ACH returns in the last 7 days.</div>';
+    // 60 days, one row per customer: customers with an open ticket first, then by number of returns.
+    var by = {};
+    rs.forEach(function (x) {
+      var g = by[x[1]] = by[x[1]] || { id: x[1], n: 0, total: 0, last: "", reasons: {} };
+      g.n++; g.total += x[2] || 0; if (String(x[4]) > g.last) g.last = String(x[4]);
+      var code = String(x[5] || "unknown").split(":")[0]; g.reasons[code] = (g.reasons[code] || 0) + 1;
+    });
+    var groups = Object.keys(by).map(function (k) { var g = by[k]; g.open = ROWS.some(function (r) { return (r[RC.merchants] || []).indexOf(k) !== -1; }); return g; })
+      .sort(function (a, b) { return (b.open ? 1 : 0) - (a.open ? 1 : 0) || b.n - a.n || b.total - a.total; });
+    document.getElementById("returnsBySummary").textContent = "ACH returns by customer, last 60 days: " + rs.length + " returns, " + money(sum(rs)) + ", " + groups.length + " customers";
+    document.getElementById("returnsByMerchant").innerHTML = groups.length ? '<table class="call-table"><thead><tr><th>Merchant</th><th>Returns</th><th>Amount</th><th>Last return</th><th>Reasons</th><th>Open tickets</th></tr></thead><tbody>' +
+      groups.map(function (g) {
+        var reasons = Object.keys(g.reasons).sort(function (a, b) { return g.reasons[b] - g.reasons[a]; }).map(function (c) { return escapeHtml(c) + (g.reasons[c] > 1 ? " x" + g.reasons[c] : ""); }).join(", ");
+        return '<tr><td>' + merchantCell(g.id) + '</td><td style="font-variant-numeric:tabular-nums;">' + g.n + '</td><td style="font-variant-numeric:tabular-nums;">' + money(g.total) + '</td>' +
+          '<td>' + fmtDay(g.last) + '</td><td>' + reasons + '</td><td>' + ticketsForMerchant(g.id) + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<div class="panel-empty">No ACH returns in the last 60 days.</div>';
+    document.getElementById("disputesHistorySummary").textContent = "Closed disputes, last 120 days: " + closed.length + " (" + lost.length + " lost, " + won.length + " won)";
+    document.getElementById("disputesHistory").innerHTML = closed.length ? disputeRows(closed, false) : '<div class="panel-empty">No closed disputes in the last 120 days.</div>';
+  }
+
   // ---- From Payrix / Worldpay: requests the processor sent us (Boarding, Risk, ...) ----
   function renderProcessorSection() {
     var rows = ROWS.filter(function (r) { return r[RC.fromProcessor]; });
@@ -1581,6 +1704,7 @@
     derive();
     renderKPIs();
     renderPayrixSection();
+    renderDisputesSection();
     renderProcessorSection();
     renderTierChart();
     renderAssigneeChart();
