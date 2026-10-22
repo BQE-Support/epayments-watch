@@ -1,0 +1,1719 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ePayments Watch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233454D1'/%3E%3Ctext x='16' y='22' font-size='17' text-anchor='middle' fill='white' font-family='Georgia'%3E%24%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="bqe-board.js"></script>
+<style>
+  :root {
+    --bg: #F5F6F9;
+    --surface: #FFFFFF;
+    --surface-alt: #ECEFF5;
+    --border: #DDE1EA;
+    --ink: #16213E;
+    --ink-2: #47517A;
+    --ink-3: #8890AC;
+    --accent: #3454D1;
+    --accent-soft: #E7EBFB;
+    --good: #1E8A5F;
+    --good-soft: #E4F5EC;
+    --warning: #B8801E;
+    --warning-soft: #FBF1DE;
+    --critical: #C23B3B;
+    --critical-soft: #FBE7E4;
+    --seg-main: #3454D1;
+    --seg-premium: #1E8A8A;
+    --seg-low: #7A4FA0;
+    --shadow: 0 1px 2px rgba(22,33,62,0.06), 0 6px 16px rgba(22,33,62,0.06);
+    --serif: Georgia, "Iowan Old Style", "Source Serif 4", "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0C1220; --surface: #131A2B; --surface-alt: #1B2438; --border: #29334A;
+      --ink: #E9ECF6; --ink-2: #B0B7D1; --ink-3: #7C86A3;
+      --accent: #7C93F5; --accent-soft: #1E2748;
+      --good: #4FC090; --good-soft: #123024;
+      --warning: #E3AC49; --warning-soft: #34240A;
+      --critical: #E2685A; --critical-soft: #38201B;
+      --seg-main: #7C93F5; --seg-premium: #4FBEBE; --seg-low: #B98CDB;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C1220; --surface: #131A2B; --surface-alt: #1B2438; --border: #29334A;
+    --ink: #E9ECF6; --ink-2: #B0B7D1; --ink-3: #7C86A3;
+    --accent: #7C93F5; --accent-soft: #1E2748;
+    --good: #4FC090; --good-soft: #123024;
+    --warning: #E3AC49; --warning-soft: #34240A;
+    --critical: #E2685A; --critical-soft: #38201B;
+    --seg-main: #7C93F5; --seg-premium: #4FBEBE; --seg-low: #B98CDB;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F6F9; --surface: #FFFFFF; --surface-alt: #ECEFF5; --border: #DDE1EA;
+    --ink: #16213E; --ink-2: #47517A; --ink-3: #8890AC;
+    --accent: #3454D1; --accent-soft: #E7EBFB;
+    --good: #1E8A5F; --good-soft: #E4F5EC;
+    --warning: #B8801E; --warning-soft: #FBF1DE;
+    --critical: #C23B3B; --critical-soft: #FBE7E4;
+    --seg-main: #3454D1; --seg-premium: #1E8A8A; --seg-low: #7A4FA0;
+    --shadow: 0 1px 2px rgba(22,33,62,0.06), 0 6px 16px rgba(22,33,62,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); }
+  .dash { font-family: var(--sans); background: var(--bg); color: var(--ink); min-height: 100%; padding: 32px 20px 80px; }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  .masthead { display: flex; flex-direction: column; gap: 6px; }
+  .back-link { font-size: 12px; }
+  .back-link a { color: var(--ink-3); text-decoration: none; }
+  .back-link a:hover { color: var(--accent); text-decoration: underline; }
+  .eyebrow { font: 600 11px/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); }
+  h1 { font: 400 34px/1.15 var(--serif); margin: 2px 0 0; color: var(--ink); text-wrap: balance; }
+  .scope-line { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+  .scope-line b { color: var(--ink); font-weight: 600; }
+  .snapshot-tag {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+    font-size: 12px; color: var(--ink-3); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 10px 4px 8px; width: fit-content;
+  }
+  .snapshot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); flex: none; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  @media (max-width: 640px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px;
+    cursor: pointer; text-align: left; font-family: var(--sans); width: 100%; margin: 0;
+    appearance: none; -webkit-appearance: none; color: inherit;
+  }
+  .kpi:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  .kpi:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .kpi.critical { border-color: color-mix(in srgb, var(--critical) 35%, var(--border)); }
+  .kpi.active { border-color: var(--accent); background: var(--accent-soft); }
+  .kpi-label { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  .kpi-value { font: 400 26px/1.1 var(--serif); font-variant-numeric: tabular-nums; }
+  .kpi-value.crit { color: var(--critical); }
+  .kpi-sub { font-size: 12px; color: var(--ink-2); }
+
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .section-title { font: 400 19px/1.2 var(--serif); margin: 0; }
+  .section-note { font-size: 12.5px; color: var(--ink-3); }
+  .hero-title { font: 400 24px/1.2 var(--serif); margin: 0; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 22px; box-shadow: var(--shadow); }
+  .bar-row { display: grid; grid-template-columns: 190px 1fr 150px; align-items: center; gap: 14px; padding: 9px 0; cursor: default; }
+  .bar-row + .bar-row { border-top: 1px solid var(--border); }
+  @media (max-width: 640px) {
+    .bar-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+    .bar-row .bar-track { grid-column: 1 / -1; order: 3; }
+  }
+  .bar-label { font-size: 13.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .bar-track { position: relative; height: 10px; background: var(--surface-alt); border-radius: 6px; overflow: hidden; }
+  .bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 6px; }
+  .bar-figs { text-align: right; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar-figs b { color: var(--ink); font-size: 14px; }
+  .bar-row.clickable { cursor: pointer; }
+  .bar-row.clickable:hover .bar-label { color: var(--accent); }
+  .bar-chevron { display: inline-block; width: 9px; flex: none; color: var(--ink-3); font-size: 10px; transition: transform 0.15s ease; }
+  .bar-chevron.open { transform: rotate(90deg); }
+  .ticket-drilldown { padding: 6px 4px 16px 26px; display: flex; flex-direction: column; gap: 2px; }
+  .ticket-item { padding: 8px 0; border-top: 1px solid var(--border); font-size: 12.5px; }
+  .ticket-item:first-child { border-top: none; padding-top: 4px; }
+  .ticket-item-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ticket-item-head a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .ticket-item-head a:hover { text-decoration: underline; }
+  .ticket-item-status { font-size: 11.5px; color: var(--ink-3); }
+  .ticket-item-subject { color: var(--ink); margin-top: 2px; }
+  .ticket-item-meta { color: var(--ink-2); font-size: 11.5px; margin-top: 2px; }
+  .ticket-item-snippet { color: var(--ink-3); font-size: 11.5px; margin-top: 3px; font-style: italic; }
+  .ticket-item.reviewed { opacity: 0.55; }
+  .ticket-item.reviewed .ticket-item-subject { text-decoration: line-through; text-decoration-color: var(--ink-3); }
+  .ticket-item-review { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+  .review-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); cursor: pointer; user-select: none; }
+  .review-toggle input { cursor: pointer; }
+  .review-note-input {
+    flex: 1; min-width: 140px; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: var(--sans);
+  }
+  .recheck-toggle { color: var(--warning); font-weight: 600; }
+  .table-recheck { margin-top: 4px; }
+  .review-history { margin-top: 5px; font-size: 11.5px; color: var(--ink-3); width: 100%; }
+  .review-history summary { cursor: pointer; color: var(--ink-2); }
+  .review-history-item { padding: 3px 0; border-top: 1px solid var(--border); }
+  .review-history-item:first-child { border-top: none; }
+  .review-history-date { font-weight: 600; color: var(--ink-2); margin-right: 6px; }
+  table.data-table tbody tr.reviewed { opacity: 0.55; }
+  table.data-table tbody tr.reviewed .subject-cell { text-decoration: line-through; text-decoration-color: var(--ink-3); }
+  .table-note-input {
+    width: 100%; border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    border-radius: 6px; padding: 3px 7px; font-size: 12px; font-family: var(--sans);
+  }
+  .kpi-drilldown { margin-top: -8px; }
+
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .pill-toggle {
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+    border-radius: 999px; padding: 7px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    font-family: var(--sans);
+  }
+  .pill-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .search-input {
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    border-radius: 999px; padding: 7px 14px; font-size: 12.5px; font-family: var(--sans); min-width: 220px;
+  }
+  .filter-label { font-size: 12.5px; color: var(--ink-3); font-weight: 600; }
+
+  .chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-decoration: none; }
+  .chip-noreply { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+  .chip-awaiting { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+  .chip-backforth { background: color-mix(in srgb, var(--seg-low) 18%, transparent); color: var(--seg-low); }
+  .chip-gal { background: color-mix(in srgb, var(--seg-premium) 18%, transparent); color: var(--seg-premium); }
+  .chip-es { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  a.chip:hover { text-decoration: underline; }
+  .chip-offhours { background: color-mix(in srgb, var(--ink-3) 20%, transparent); color: var(--ink-2); }
+
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--ink-3); font-size: 13.5px; }
+  .panel-empty { font-size: 12.5px; color: var(--ink-3); padding: 8px 0; }
+
+  .suggestion-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
+  .suggestion-item:first-child { border-top: none; padding-top: 2px; }
+  .suggestion-check {
+    flex: none; width: 20px; height: 20px; border: 1.5px solid var(--border); border-radius: 5px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    background: var(--surface); color: transparent; font-size: 13px; font-weight: 700;
+  }
+  .suggestion-check:hover { border-color: var(--accent); }
+  .suggestion-check.done { background: var(--good); border-color: var(--good); color: #fff; }
+  .suggestion-body { flex: 1; min-width: 0; }
+  .suggestion-text { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
+  .suggestion-text b { font-weight: 700; }
+  .suggestion-text a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .suggestion-text a:hover { text-decoration: underline; }
+  .suggestion-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .suggestion-restore {
+    flex: none; font-size: 11.5px; font-weight: 600; color: var(--accent); background: none; border: none;
+    cursor: pointer; font-family: var(--sans); padding: 2px 0; margin-top: 2px;
+  }
+  .suggestion-restore:hover { text-decoration: underline; }
+
+  .trend-legend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12.5px; color: var(--ink-2); flex-wrap: wrap; }
+  .trend-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .trend-legend .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .trend-svg-wrap { width: 100%; overflow-x: auto; }
+  .trend-svg { width: 100%; min-width: 640px; height: auto; display: block; }
+  .trend-axis-label { font: 500 10.5px var(--sans); fill: var(--ink-3); }
+  .trend-gridline { stroke: var(--border); stroke-width: 1; }
+
+  .breakdown-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .breakdown-grid { grid-template-columns: 1fr; } }
+
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table thead th {
+    position: sticky; top: 0; background: var(--surface); text-align: left; font-size: 11px;
+    letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); font-weight: 700;
+    padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; white-space: nowrap;
+  }
+  table.data-table thead th:not([data-key]) { cursor: default; }
+  table.data-table thead th .arrow { opacity: 0.25; margin-left: 4px; }
+  table.data-table thead th.sorted .arrow { opacity: 1; color: var(--accent); }
+  table.data-table tbody td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.data-table tbody tr:hover { background: var(--surface-alt); }
+  table.data-table a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  table.data-table a:hover { text-decoration: underline; }
+  .table-wrap { overflow-x: auto; }
+  .subject-cell { max-width: 320px; }
+  .flags-cell { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px; font-size: 12.5px; color: var(--ink-2); }
+  .pager button { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 6px; padding: 5px 12px; cursor: pointer; font-family: var(--sans); }
+  .pager button:disabled { opacity: 0.4; cursor: default; }
+
+  .agent-toolbar { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .copy-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 6px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: var(--sans); }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied { border-color: var(--good); color: var(--good); }
+  dialog.week-report { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+    padding: 20px 22px; width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto; }
+  dialog.week-report::backdrop { background: rgba(12,18,32,0.55); }
+  .wr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .wr-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  .wr-table th, .wr-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: right; }
+  .wr-table th:first-child, .wr-table td:first-child { text-align: left; }
+  .wr-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); font-weight: 600; }
+  .wr-table tr.wr-group td { color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; padding-top: 14px; }
+  .wr-better { color: var(--good); } .wr-worse { color: var(--critical); } .wr-same { color: var(--ink-3); }
+  .wr-foot { margin-top: 12px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+
+  .checkin-status { font-size: 11.5px; margin-top: 6px; }
+  .checkin-status-done { color: var(--good); font-weight: 600; }
+
+  details.panel summary { cursor: pointer; font: 400 15px/1.2 var(--serif); list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  details.panel summary::-webkit-details-marker { display: none; }
+  details.panel summary::after { content: "+"; font-family: var(--sans); font-size: 18px; color: var(--ink-3); }
+  details.panel[open] summary::after { content: "\2212"; }
+  .method-body { margin-top: 14px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+  @media (max-width: 760px) { .method-body { grid-template-columns: 1fr; } }
+  .method-body h4 { font: 700 12px var(--sans); letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+  .method-body ul { margin: 0; padding-left: 18px; }
+  .method-body li { margin-bottom: 5px; }
+  .method-body code { background: var(--surface-alt); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .method-full { grid-column: 1 / -1; }
+  .method-lede { margin: 0; }
+
+  footer.foot { text-align: center; font-size: 11.5px; color: var(--ink-3); padding-top: 4px; }
+
+  @media (prefers-reduced-motion: no-preference) { .bar-fill { transition: width 0.5s ease; } }
+
+  /* ---- hosted board: top bar, sign-in, who's viewing ---- */
+  .topbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); }
+  .viewers { display: inline-flex; align-items: center; gap: 4px; }
+  .viewer-dot { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font: 700 11px var(--sans); background: var(--accent-soft); color: var(--accent); border: 1px solid var(--border); }
+  .viewer-dot.me { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .top-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 5px 12px;
+    font: 600 12px var(--sans); cursor: pointer; }
+  .top-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .snapshot-dot.live { background: var(--good); }
+  .snapshot-dot.stale { background: var(--critical); }
+  .signin { max-width: 440px; margin: 12vh auto 0; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+  .signin p { color: var(--ink-2); font-size: 14px; line-height: 1.5; margin: 0; }
+  .signin .msg { color: var(--critical); font-size: 13px; }
+  .primary-btn { border: none; background: var(--accent); color: #fff; border-radius: 8px; padding: 11px 20px; font: 600 14px var(--sans); cursor: pointer; }
+  .primary-btn:hover { filter: brightness(1.08); }
+  [hidden] { display: none !important; }
+
+  /* ---- live queue ---- */
+  .queue-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; }
+  @media (max-width: 900px) { .queue-grid { grid-template-columns: 1fr; } }
+  .q-status { display: inline-flex; align-items: center; gap: 6px; font: 700 11px var(--sans); letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 999px; }
+  .q-open { background: var(--good-soft); color: var(--good); }
+  .q-closed { background: var(--surface-alt); color: var(--ink-3); }
+  .q-warn { background: var(--warning-soft); color: var(--warning); }
+  .q-crit { background: var(--critical-soft); color: var(--critical); }
+  .q-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  @media (max-width: 640px) { .q-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .q-tile { background: var(--surface-alt); border-radius: 8px; padding: 10px 12px; }
+  .q-tile .kpi-value { font-size: 22px; }
+  button.q-tile { border: 1px solid transparent; text-align: left; font-family: var(--sans); color: inherit; cursor: pointer; width: 100%; }
+  button.q-tile:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+  button.q-tile.active { border-color: var(--accent); background: var(--accent-soft); }
+  .call-drill { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .call-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .call-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .call-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .call-table a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .q-tile.flash { animation: flash 1s steps(2, start) infinite; background: var(--critical-soft); }
+  .q-tile.flash .kpi-value { color: var(--critical); }
+  @keyframes flash { to { background: var(--surface-alt); } }
+  @media (prefers-reduced-motion: reduce) { .q-tile.flash { animation: none; } }
+  .agent-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .agent-row:first-child { border-top: none; }
+  .agent-name { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-time { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .st { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+  .st::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .st-green { background: var(--good-soft); color: var(--good); }
+  .st-red { background: var(--critical-soft); color: var(--critical); }
+  .st-yellow { background: var(--warning-soft); color: var(--warning); }
+  .st-grey { background: var(--surface-alt); color: var(--ink-3); }
+  .spark { width: 100%; height: 70px; display: block; margin-top: 12px; }
+  .spark-legend { display: flex; gap: 14px; font-size: 11.5px; color: var(--ink-3); margin-top: 4px; flex-wrap: wrap; }
+  .spark-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .spark-legend i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+  .calls-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .mini-list { margin-top: 12px; font-size: 12.5px; }
+  .mini-list .row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+  .mini-list .row:first-child { border-top: none; }
+  .mini-list .muted { color: var(--ink-3); }
+  .mini-list a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .mini-list a:hover { text-decoration: underline; }
+  .review-by { font-size: 11px; color: var(--ink-3); }
+  .chip-pending { background: var(--surface-alt); color: var(--ink-3); }
+  .chip-payrix { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+  .chip-processor { background: color-mix(in srgb, var(--seg-low) 18%, transparent); color: var(--seg-low); }
+  .chip-group { background: var(--surface-alt); color: var(--ink-2); }
+  .chip-merchant { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good); }
+  .chip-merchant-bad { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+  .esc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .esc-tiles .q-tile { cursor: default; }
+</style>
+</head>
+<body>
+
+<div class="dash">
+  <div class="wrap">
+
+    <div class="topbar" id="topbar" hidden>
+      <span class="viewers" id="viewers"></span>
+      <span id="viewerName"></span>
+      <button type="button" class="top-btn" id="arrangeBtn" title="Move sections around; your order is saved for you on every device">Arrange</button>
+      <button type="button" class="top-btn" id="resetLayoutBtn" hidden>Reset layout</button>
+      <button type="button" class="top-btn" id="themeBtn">Theme</button>
+      <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
+    </div>
+
+    <div class="signin" id="signin" hidden>
+      <div class="eyebrow">Support Operations &middot; ePayments</div>
+      <h1>ePayments Watch</h1>
+      <p>Open ePayments tickets that may need attention, tickets escalated to Payrix, ePayments escalations, and the customer's Payrix merchant status.</p>
+      <button type="button" class="primary-btn" id="signInBtn">Sign in with RingCentral</button>
+      <div class="msg" id="signinMsg"></div>
+    </div>
+
+    <div id="board" hidden style="display:flex; flex-direction:column; gap:28px;">
+    <div class="masthead">
+      <div class="eyebrow">Support Operations &middot; ePayments</div>
+      <h1>ePayments Watch</h1>
+      <div class="scope-line">
+        <b id="scopeOpen">&hellip;</b> open ePayments tickets (not yet Solved) &middot; <b id="scopeFlagged">&hellip;</b> flagged as possibly dropped &middot;
+        <b id="scopePayrix">&hellip;</b> escalated to Payrix
+      </div>
+      <div class="snapshot-tag"><span class="snapshot-dot" id="liveDot"></span><span id="genDate">Loading&hellip;</span></div>
+    </div>
+
+    <div data-section="focus" data-section-label="Where to Focus">
+    <details class="panel" id="suggestionsDetails">
+      <summary>
+        <span class="section-title">Where to Focus</span>
+        <span class="section-note" id="suggestionsCount" style="font-family:var(--sans); font-weight:400;"></span>
+      </summary>
+      <div style="margin-top:14px;">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+          <button class="pill-toggle" id="suggestionsViewToggle" aria-pressed="false">Show completed</button>
+        </div>
+        <div id="suggestionsPanel"></div>
+      </div>
+    </details>
+    </div>
+
+    <div data-section="kpis" data-section-label="Ticket KPI tiles" style="display:flex; flex-direction:column; gap:28px;">
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div id="kpiDrilldownWrap"></div>
+    </div>
+
+    <div data-section="payrixSection" id="payrixSection">
+      <div class="section-head">
+        <h2 class="hero-title">Escalated to Payrix</h2>
+        <span class="section-note" id="payrixNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <div class="esc-tiles" id="payrixTiles"></div>
+        <div style="margin-top:16px;"><div class="kpi-label">Open now</div><div id="payrixOpen" style="margin-top:6px;"></div><div id="payrixSnoozed"></div></div>
+        <details class="review-history" id="payrixHistory" style="margin-top:16px;">
+          <summary id="payrixHistorySummary">Last 180 days</summary>
+          <div class="table-wrap" style="margin-top:8px;" id="payrixHistoryTable"></div>
+        </details>
+      </div>
+    </div>
+
+    <div data-section="processorSection" id="processorSection">
+      <div class="section-head">
+        <h2 class="section-title">From Payrix / Worldpay</h2>
+        <span class="section-note" id="processorNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="processorList"></div>
+    </div>
+
+    <div data-section="tierSection" id="tierSection">
+      <div class="section-head">
+        <h2 class="hero-title">Flagged tickets, by urgency</h2>
+        <span class="section-note">Needs attention now (&le;48h since last activity) &middot; Aging (2&ndash;7 days) &middot; Long-stale backlog (7+ days) &middot; excludes GAL &amp; escalated to Payrix</span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="tierChart"></div>
+    </div>
+
+    <div data-section="assigneeSection" id="assigneeSection">
+      <div class="section-head">
+        <h2 class="section-title">Flagged tickets, by assignee</h2>
+        <span class="section-note">Excludes GAL &amp; escalated to Payrix &middot; click an agent to expand their list &middot; use Copy list to export a plain-text list for that agent</span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="assigneeChart"></div>
+    </div>
+
+    <div data-section="backforthAssigneeSection" id="backforthAssigneeSection">
+      <div class="section-head">
+        <h2 class="section-title">Heavy back-and-forth, by assignee</h2>
+        <span class="section-note">Not urgent by itself: long threads worth a look whoever's turn it is to reply &middot; excludes GAL &amp; escalated to Payrix</span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="backforthAssigneeChart"></div>
+      <div id="backforthSnoozed"></div>
+    </div>
+
+    <div data-section="esSection" id="esSection">
+      <div class="section-head">
+        <h2 class="section-title">ES Escalations (ePayments)</h2>
+        <span class="section-note" id="esNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="esList"></div>
+    </div>
+
+    <div data-section="galSection" id="galSection">
+      <div class="section-head">
+        <h2 class="section-title">With Dev Team (GAL)</h2>
+        <span class="section-note" id="galNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="galList"></div>
+    </div>
+
+    <div data-section="merchantSection" id="merchantSection">
+      <div class="section-head">
+        <h2 class="section-title">Payrix merchant check</h2>
+        <span class="section-note" id="merchantNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;" id="merchantList"></div>
+    </div>
+
+    <div data-section="tableSection" id="tableSection" data-section-label="Other open tickets">
+    <details class="panel" id="tableDetails">
+      <summary>
+        <span class="section-title">Other open tickets (no flags)</span>
+        <span class="section-note" id="tableCount" style="font-family:var(--sans); font-weight:400;"></span>
+      </summary>
+      <div style="margin-top:14px;">
+        <p class="section-note" style="margin:0 0 12px;">Tickets not shown in any section above: not flagged, not heavy back-and-forth. Mostly pending on the customer. Switch to All open for the full reference list. Excludes GAL and tickets escalated to Payrix.</p>
+        <div class="filters" style="margin-bottom:14px;">
+          <span class="filter-label">Show:</span>
+          <button class="pill-toggle" data-table-filter="other" aria-pressed="true">No flags</button>
+          <button class="pill-toggle" data-table-filter="all" aria-pressed="false">All open</button>
+          <input type="text" class="search-input" id="tableSearch" placeholder="Search subject or requester&hellip;">
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="ticketTable">
+            <thead>
+              <tr>
+                <th data-key="id">Ticket<span class="arrow">&#9662;</span></th>
+                <th data-key="subject">Subject<span class="arrow">&#9662;</span></th>
+                <th data-key="requester">Requester / Org<span class="arrow">&#9662;</span></th>
+                <th data-key="assignee">Assignee<span class="arrow">&#9662;</span></th>
+                <th data-key="status">Status<span class="arrow">&#9662;</span></th>
+                <th data-key="hours">Hours since activity<span class="arrow">&#9662;</span></th>
+                <th data-key="comments">Comments<span class="arrow">&#9662;</span></th>
+                <th data-key="flags">Flags<span class="arrow">&#9662;</span></th>
+                <th data-key="reviewed">Reviewed<span class="arrow">&#9662;</span></th>
+                <th>Notes</th>
+                <th>Internal note</th>
+              </tr>
+            </thead>
+            <tbody id="ticketTableBody"></tbody>
+          </table>
+        </div>
+        <div class="pager" id="ticketPager"></div>
+      </div>
+    </details>
+    </div>
+
+    <div data-section="trendSection" id="trendSection">
+      <div class="section-head">
+        <h2 class="section-title">Open &amp; flagged counts over time</h2>
+        <span class="section-note" id="trendNote">One point per hour on weekdays</span>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <div class="trend-legend" id="trendLegend"></div>
+        <div class="trend-svg-wrap" id="trendChart"></div>
+      </div>
+    </div>
+
+    <div data-section="breakdowns" data-section-label="By status, status detail and flag reason">
+    <div class="breakdown-grid">
+      <div>
+        <div class="section-head"><h2 class="section-title">By status</h2><span class="section-note">Excludes GAL &amp; escalated to Payrix</span></div>
+        <div class="panel" id="statusChart" style="margin-top:12px;"></div>
+      </div>
+      <div>
+        <div class="section-head"><h2 class="section-title">By flag reason</h2><span class="section-note">Excludes GAL &amp; escalated to Payrix</span></div>
+        <div class="panel" id="reasonChart" style="margin-top:12px;"></div>
+      </div>
+      <div>
+        <div class="section-head"><h2 class="section-title">By Ticket Status Detail</h2><span class="section-note">Every open ticket</span></div>
+        <div class="panel" id="detailChart" style="margin-top:12px;"></div>
+      </div>
+      <div>
+        <div class="section-head"><h2 class="section-title">By group</h2><span class="section-note">Every open ticket</span></div>
+        <div class="panel" id="groupChart" style="margin-top:12px;"></div>
+      </div>
+    </div>
+    </div>
+
+    <div data-section="methodology" data-section-label="Methodology and scope notes">
+    <details class="panel">
+      <summary>Methodology &amp; scope notes</summary>
+      <div class="method-body">
+        <div class="method-full">
+          <h4>Data source</h4>
+          <p class="method-lede">
+            Every unsolved ticket (New, Open, Pending or On Hold) in the Zendesk ePayment Team group (<code>group_id 25484726460951</code>),
+            plus unsolved tickets in any other group whose CORE-Module is ePayments or whose Ticket Status Detail is
+            "Escalated::External Teams::Payrix". Tickets come from the support team's shared Zendesk store, which reads Zendesk's
+            change feed every 2 minutes. This page doesn't pull anything itself: it reads that store, the shared Jira store, and
+            the shared Payrix merchant store. Flags and hours are worked out in your browser, so they stay current between refreshes.
+          </p>
+        </div>
+        <div>
+          <h4>Escalated to Payrix</h4>
+          <ul>
+            <li>A ticket counts when its Ticket Status Detail field is <b>Escalated::External Teams::Payrix</b> (tag <code>escalated___payrix</code>). There is no API into Payrix's own support desk (wp4p.zendesk.com) yet, so this board can't see Payrix's side of the request.</li>
+            <li>These tickets wait on Payrix, so like GAL tickets they sit in their own section and are left out of the flagged views. A review hides one from the open list for 7 days.</li>
+            <li>The 180-day list includes solved tickets. A ticket only shows there if the field still says Payrix; when an agent changes the detail on solving (for example to Solved::Troubleshooting) the ticket drops out, so the history undercounts. Zendesk doesn't keep when the field was set, so "days open" is from ticket creation.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>From Payrix / Worldpay</h4>
+          <ul>
+            <li>Tickets whose requester email is at wp4p.zendesk.com (Payrix Boarding and Risk), payrix.helpscoutapp.com, payrix.com, worldpay.com, globalpay.com or globalpayments.com. These are requests from the processor to BQE.</li>
+            <li>They stay in the flagged views: a reply to these goes to Payrix, and it still counts as our turn.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Flag definitions</h4>
+          <ul>
+            <li><b>No agent reply yet</b>: open 4+ hours with zero public comment from anyone other than the requester.</li>
+            <li><b>Awaiting our reply</b>: the requester's comment is the most recent public comment, 4+ hours ago.</li>
+            <li><b>Heavy back-and-forth</b>: 10+ public comments. Shown for a look, not urgent by itself.</li>
+            <li><b>Recently checked in</b>: the newest comment is an internal note from the last 24 hours. The ticket leaves the flagged views until something newer happens.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Urgency tiers</h4>
+          <ul>
+            <li><b>Needs attention now</b>: flagged, last activity within 48 hours.</li>
+            <li><b>Aging</b>: flagged, last activity 2&ndash;7 days ago.</li>
+            <li><b>Long-stale backlog</b>: flagged, last activity 7+ days ago.</li>
+            <li>Hours are calendar time, not business hours.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Payrix merchant check</h4>
+          <ul>
+            <li>Merchant data comes from the Payrix API (read-only, refreshed every 6 hours): status, frozen, inactive, last activity and total approved sales.</li>
+            <li>A ticket is matched to a merchant when the Zendesk organization name equals the merchant's DBA or legal name after dropping punctuation and suffixes like Inc, LLC and PC, or when the requester's email is the merchant's email. No match doesn't mean the customer has no merchant account, only that the names differ.</li>
+            <li>Frozen, closed or inactive merchants, and merchants with no activity for 30+ days, are highlighted. Payrix status codes: 2 boarded, 3 manual, 4 closed.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>With Dev Team (GAL) and ES</h4>
+          <ul>
+            <li>A <code>GAL-#####</code> in the subject puts a ticket in With Dev Team; it's left out of every other section. GAL chips show the issue's Support Ranking, and "Missing SR" when it has none.</li>
+            <li>ES Escalations (ePayments) are open Jira ES issues with the component <b>ePayments, BQE</b>, linked to Zendesk through the ES Number field. Reviews there last for the day.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Reviewed checkbox &amp; notes</h4>
+          <ul>
+            <li>Shared by everyone who can open this board, with who changed them last. They stay on this board; nothing is written to Zendesk, Jira or Payrix.</li>
+            <li>GAL, escalated-to-Payrix and heavy back-and-forth reviews last 7 days; ES reviews last the day; other reviews last until someone rechecks them.</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Refresh</h4>
+          <ul>
+            <li>The page refreshes itself every 15 minutes while it's open and on screen, and right away when you come back to it after that. Ticket changes show up within a few minutes; merchant data within 6 hours.</li>
+            <li>The trend chart gets one point per hour on weekdays, starting 10/22/2026.</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+    </div>
+
+    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.0</footer>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ROWS columns: see RC below. Built in the browser from the epayments-watch function's raw ticket fields
+  // (see buildRows), and rebuilt on every refresh so hours stay current.
+  var ROWS = [];
+  // HISTORY columns: [timestampMs, openCount, flaggedCount, needsAttnCount, agingCount, staleCount, payrixEsc, fromProcessor]
+  var HISTORY = [];
+  // ES_ROWS columns: [key, summary, status, priority, daysOpen(number|null), overdue(0/1),
+  //                   assigneeName, tier, company, url, linkedTicketId(number|null),
+  //                   linkedTicketSubject(string|null), linkedTicketStatus(string|null)]
+  // Open Jira ES issues with component "ePayments, BQE", from the shared Jira store, linked to Zendesk through "ES Number".
+  var ES_ROWS = [];
+  var GENERATED_AT = "";
+  var DATA = null;            // last epayments-watch response
+  var REVIEWS = {};           // shared Reviewed/notes, keyed by ticket id or "jira:ES-#####"
+  var VIEWER = null;
+  var BOARD = "epayments-watch";
+
+  // ---- building rows from the shared stores ----
+  var NOW = Date.now();
+  var NO_REPLY_HOURS = 4, AWAITING_HOURS = 4, BACKFORTH_COMMENTS = 10, CHECKIN_HOURS = 24;
+  var EP_GROUP = "ePayment Team";
+  // ep_board() tickets: [0 id, 1 subject, 2 status, 3 requester, 4 org, 5 assignee, 6 created, 7 lastPublicAt,
+  //   8 lastPublicByRequester, 9 publicComments, 10 agentPublicComments, 11 lastPublicSnippet, 12 lastCommentAt,
+  //   13 lastCommentPublic, 14 internalSnippet, 15 ticketType, 16 requesterEmail, 17 commentsKnown, 18 groupName,
+  //   19 inEpaymentGroup, 20 statusDetail, 21 module, 22 escalatedToPayrix, 23 fromProcessor, 24 merchantIds]
+  function buildRows(tickets) {
+    return tickets.map(function (t) {
+      var created = Date.parse(t[6]), lastPub = t[7] ? Date.parse(t[7]) : null, known = !!t[17];
+      var hours = (NOW - (lastPub || created)) / 3600000, hoursCreated = (NOW - created) / 3600000;
+      var noReply = known && (t[10] || 0) === 0 && hoursCreated >= NO_REPLY_HOURS;
+      var awaiting = known && !!t[8] && lastPub !== null && hours >= AWAITING_HOURS;
+      var backforth = (t[9] || 0) >= BACKFORTH_COMMENTS;
+      var refs = [], seen = {};
+      String(t[1] || "").replace(/GAL-\d+/g, function (m) { if (!seen[m]) { seen[m] = 1; refs.push(m); } return m; });
+      String(t[1] || "").replace(/ES-\d+/g, function (m) { if (!seen[m]) { seen[m] = 1; refs.push(m); } return m; });
+      var gal = (String(t[1] || "").match(/GAL-\d+/) || [null])[0];
+      var checkedIn = t[13] === false && t[12] && NOW - Date.parse(t[12]) < CHECKIN_HOURS * 3600000;
+      return [t[0], t[1], t[2], t[3] || "", t[4] || "", t[5] || "Unassigned", hours, hoursCreated,
+        t[9] || 0, t[8] ? "requester" : "agent", noReply, awaiting, backforth, noReply || awaiting, t[11] || "",
+        "https://bqe.zendesk.com/agent/tickets/" + t[0], gal, !!t[22], t[15], !!t[23], t[18] || "", !!t[19],
+        !!checkedIn, checkedIn ? (t[14] || "") : "", refs.join(","), known, t[20] || "", t[24] || []];
+    });
+  }
+  // ep_board() es: [key, summary, status, priority, created, nextUpdateDue, assignee, company, updated]
+  function buildEsRows(es, links, rows) {
+    var fromSubjects = {};
+    rows.forEach(function (r) {
+      jiraRefsOf(r).forEach(function (ref) { if (ref.indexOf("ES-") === 0 && !fromSubjects[ref]) fromSubjects[ref] = [r[RC.id], r[RC.subject], r[RC.status]]; });
+    });
+    return es.map(function (e) {
+      var link = (links && links[e[0]]) || fromSubjects[e[0]] || null;
+      return [e[0], e[1], e[2], e[3], e[4] ? (NOW - Date.parse(e[4])) / 86400000 : null, e[5] && Date.parse(e[5]) < NOW ? 1 : 0,
+        e[6] || "Unassigned", "", e[7] || "", "https://bqetrack.atlassian.net/browse/" + e[0],
+        link ? link[0] : null, link ? link[1] : null, link ? link[2] : null];
+    });
+  }
+
+  var RC = {
+    id: 0, subject: 1, status: 2, requester: 3, org: 4, assignee: 5,
+    hours: 6, hoursCreated: 7, comments: 8, lastFrom: 9,
+    flagNoReply: 10, flagAwaiting: 11, flagBackforth: 12, needsAttention: 13, snippet: 14, url: 15, gal: 16,
+    payrixEsc: 17, ticketType: 18, fromProcessor: 19, group: 20, inGroup: 21, checkedInRecently: 22, checkinNote: 23,
+    jiraRefs: 24, commentsKnown: 25, statusDetail: 26, merchants: 27
+  };
+  var ES_RC = {
+    key: 0, summary: 1, status: 2, priority: 3, daysOpen: 4, overdue: 5, assignee: 6, tier: 7,
+    company: 8, url: 9, linkedTicketId: 10, linkedTicketSubject: 11, linkedTicketStatus: 12
+  };
+  // ep_board() merchants: id -> [0 dba, 1 entityName, 2 status, 3 inactive, 4 frozen, 5 statusReason, 6 lastActivity,
+  //   7 totalApprovedSales (cents), 8 created]. Payrix status codes: 2 boarded, 3 manual, 4 closed.
+  var MERCHANT_STATUS = { 0: "Not ready", 1: "Ready", 2: "Boarded", 3: "Manual", 4: "Closed" };
+  var IDLE_DAYS = 30;
+  function merchantsOf(r) { var m = (DATA && DATA.merchants) || {}; return (r[RC.merchants] || []).map(function (id) { return [id, m[id]]; }).filter(function (x) { return x[1]; }); }
+  function merchantIdleDays(m) { return m[6] ? (NOW - Date.parse(m[6])) / 86400000 : null; }
+  // The worst thing about a merchant, or "" when it looks normal.
+  function merchantProblem(m) {
+    if (m[4]) return "Frozen";
+    if (m[2] === 4) return "Closed";
+    if (m[3]) return "Inactive";
+    var idle = merchantIdleDays(m);
+    if (idle !== null && idle >= IDLE_DAYS) return "No activity " + Math.round(idle) + "d";
+    return "";
+  }
+  // Payrix often gives a date with no time; show those as the calendar date, not shifted to Pacific.
+  var utcDayFmt = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short", month: "numeric", day: "numeric" });
+  function merchantDay(s) { return (/T00:00:00(\.0+)?(Z|\+00:00)$/.test(s) ? utcDayFmt : ptDayFmt).format(new Date(s)); }
+  function merchantName(m) { return m[0] || m[1] || "(no name)"; }
+  // "open__researching_issue_" -> "Open: Researching issue" (Ticket Status Detail values)
+  function detailLabel(v) {
+    if (!v) return "(none)";
+    return String(v).split("__").map(function (p) {
+      var s = p.replace(/_/g, " ").trim(); return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+    }).filter(function (s) { return s; }).join(": ");
+  }
+
+  var STATUS_LABEL = { "new": "New", "open": "Open", "pending": "Pending", "hold": "On Hold" };
+  var STATUS_VAR = { "new": "--ink-3", "open": "--accent", "pending": "--warning", "hold": "--seg-low" };
+
+  function fmtNum(n) { if (n === null || n === undefined || isNaN(n)) return "—"; return Math.round(n).toLocaleString(); }
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  // Zendesk comment snippets can carry HTML entities ("&nbsp;", "&amp;"); show them as text.
+  var entityEl = document.createElement("textarea");
+  function plainText(s) { entityEl.innerHTML = String(s || ""); return entityEl.value.replace(/\s+/g, " ").trim(); }   // \s includes the non-breaking space
+  function fmtHours(h) {
+    if (h < 48) return Math.round(h) + "h";
+    return Math.round(h / 24) + "d";
+  }
+  function whoLabel(r) {
+    var who = r[RC.requester] || "";
+    var org = r[RC.org] || "";
+    if (who && org) return who + " / " + org;
+    return who || org || "";
+  }
+  var JIRA_BROWSE_URL = "https://bqetrack.atlassian.net/browse/";
+  // Every GAL-##### (Engineering) and ES-##### (Escalations) reference found in the ticket
+  // subject, in order, deduped - a subject can carry more than one (e.g. "GAL-117822 | ES-21457
+  // | ES-22180 | ..."). Just a static browse link, no Jira API call needed - same pattern the
+  // At-Risk dashboard already uses (see at-risk-dashboard-README.md).
+  function jiraRefsOf(r) {
+    var raw = r[RC.jiraRefs];
+    if (!raw) return [];
+    return raw.split(",").filter(function (s) { return s; });
+  }
+  function flagsOf(r) {
+    var f = [];
+    if (r[RC.flagNoReply]) f.push({ key: "noreply", label: "No agent reply", cls: "chip-noreply" });
+    if (r[RC.flagAwaiting]) f.push({ key: "awaiting", label: "Awaiting our reply", cls: "chip-awaiting" });
+    if (r[RC.flagBackforth]) f.push({ key: "backforth", label: r[RC.comments] + " comments", cls: "chip-backforth" });
+    if (r[RC.payrixEsc]) f.push({ key: "payrix", label: "Escalated to Payrix", cls: "chip-payrix" });
+    if (r[RC.fromProcessor]) f.push({ key: "processor", label: "From Payrix/Worldpay", cls: "chip-processor" });
+    jiraRefsOf(r).forEach(function (ref) {
+      // GAL chips carry the issue's Support Ranking; a GAL without one gets a red "Missing SR" chip.
+      var g = ref.indexOf("GAL-") === 0 && DATA && DATA.gal ? DATA.gal[ref] : null, sr = g && g[0] !== null && g[0] !== undefined && g[0] !== "" ? g[0] : null;
+      f.push({ key: "jira:" + ref, label: ref + (sr !== null ? " · SR " + sr : ""), cls: ref.indexOf("ES-") === 0 ? "chip-es" : "chip-gal", href: JIRA_BROWSE_URL + ref });
+      if (g && g[2] && sr === null) f.push({ key: "nosr:" + ref, label: "Missing SR", cls: "chip-noreply", href: JIRA_BROWSE_URL + ref });
+    });
+    merchantsOf(r).forEach(function (x) {
+      var p = merchantProblem(x[1]);
+      f.push({ key: "merchant:" + x[0], label: "Payrix: " + (p || MERCHANT_STATUS[x[1][2]] || "status " + x[1][2]), cls: p ? "chip-merchant-bad" : "chip-merchant" });
+    });
+    if (!r[RC.inGroup] && r[RC.group]) f.push({ key: "group", label: "In " + r[RC.group], cls: "chip-group" });
+    if (!r[RC.commentsKnown]) f.push({ key: "pending", label: "Comments not read yet", cls: "chip-pending" });
+    return f;
+  }
+  function chipsHtml(r) {
+    return flagsOf(r).map(function (f) {
+      return f.href
+        ? '<a class="chip ' + f.cls + '" href="' + f.href + '" target="_blank" rel="noopener">' + escapeHtml(f.label) + '</a>'
+        : '<span class="chip ' + f.cls + '">' + f.label + '</span>';
+    }).join(" ");
+  }
+  function ticketLink(r) { return '<a href="' + r[RC.url] + '" target="_blank" rel="noopener">#' + r[RC.id] + '</a>'; }
+
+  // GAL/Dev-Team tickets and tickets escalated to Payrix each get their own section and are left out of every other
+  // breakdown below - urgency tiers, by-assignee, by-status, by-reason, Where to Focus, and the main table all work off
+  // workingRows/flagged. Both are waiting on another team, so being on the list isn't a dropped ball on our side.
+  // A ticket checked in recently (internal note, nothing newer) stays a real open ticket but drops out of every
+  // flagged/needs-attention view until something new happens on it.
+  var workingRows = [], flagged = [];
+  function derive() {
+    workingRows = ROWS.filter(function (r) { return !r[RC.gal] && !r[RC.payrixEsc]; });
+    flagged = workingRows.filter(function (r) { return r[RC.needsAttention] && !r[RC.checkedInRecently]; });
+    document.getElementById("scopeOpen").textContent = ROWS.length.toLocaleString();
+    document.getElementById("scopeFlagged").textContent = flagged.length.toLocaleString();
+    document.getElementById("scopePayrix").textContent = ROWS.filter(function (r) { return r[RC.payrixEsc]; }).length.toLocaleString();
+  }
+
+  // ---- Per-ticket review state (checkbox + note), SHARED: saved through the epayments-watch function
+  // (table ep_reviews), so everyone with access sees the same marks, with who changed them last.
+  // history: [{ note, by, at }, ...] - past review passes, oldest first, added only by a recheck.
+  // How long a "Reviewed" lasts depends on the item (2026-10-21); notes can be added at any time:
+  //   GAL (With Dev Team) and heavy back-and-forth tickets: 7 days, then they come back on their own
+  //   ES escalations: the day it was ticked (Pacific), so open ones come back every morning
+  //   everything else: until someone rechecks it (the earlier rule)
+  var REVIEW_WEEK_MS = 7 * 86400000;
+  var REVIEW_RULE = {};   // id -> "week" | "day", rebuilt in apply()
+  var ptDateFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles" });
+  function getReview(id) {
+    var r = REVIEWS[id];
+    if (!r) return { reviewed: false, note: "", history: [] };
+    var out = { reviewed: !!r.reviewed, note: r.note || "", updatedAt: r.at ? Date.parse(r.at) : null, by: r.by || "",
+      reviewedAt: r.rat ? Date.parse(r.rat) : (r.reviewed && r.at ? Date.parse(r.at) : null), rule: REVIEW_RULE[id] || "",
+      history: (r.history || []).map(function (h) { return { note: h.note, by: h.by, updatedAt: Date.parse(h.at) }; }) };
+    if (out.reviewed && out.rule && out.reviewedAt) {
+      if (out.rule === "week") out.backOn = out.reviewedAt + REVIEW_WEEK_MS;
+      var lapsed = out.rule === "week" ? Date.now() >= out.backOn : ptDateFmt.format(new Date(out.reviewedAt)) !== ptDateFmt.format(new Date());
+      if (lapsed) { out.reviewed = false; out.lapsed = true; }
+    }
+    return out;
+  }
+  // Reviewed now and still inside its week (GAL / back-and-forth): left out of the main lists until it comes back.
+  function snoozed(id) { var rv = getReview(id); return rv.reviewed && rv.rule === "week"; }
+  var saveTimers = {};
+  function saveReview(id, body, onDone) {
+    BQEBoard.api(BOARD, { method: "POST", body: Object.assign({ id: String(id) }, body) }).then(function (j) {
+      REVIEWS[id] = j.review; if (onDone) onDone();
+    }).catch(function (e) { setStatus("Couldn't save (" + e.message + ")", true); });
+  }
+  function setReviewed(id, val) {
+    var r = getReview(id), now = new Date().toISOString();
+    REVIEWS[id] = { reviewed: val, note: r.note, by: VIEWER && VIEWER.name, at: now, rat: val ? now : null, history: (REVIEWS[id] || {}).history || [] };
+    saveReview(id, { action: "review", reviewed: val }, REVIEW_RULE[id] === "week" ? renderAll : null);
+  }
+  // Notes save 0.8 s after typing stops.
+  function setNote(id, text) {
+    var cur = REVIEWS[id] || { reviewed: false, history: [] };
+    REVIEWS[id] = Object.assign({}, cur, { note: text });
+    clearTimeout(saveTimers[id]);
+    saveTimers[id] = setTimeout(function () { saveReview(id, { action: "review", note: text }); }, 800);
+  }
+  // "Recheck": a ticket reviewed on a PRIOR calendar day (see isPriorDay below)
+  // shows an extra checkbox to flag it for a fresh look. Checking it archives the old
+  // reviewed/note pair into history (so the prior context isn't lost) and resets reviewed/note
+  // for today's pass - the ticket goes back to looking unreviewed everywhere it renders.
+  function isPriorDay(ts) {
+    if (!ts) return false;
+    var a = new Date(ts), b = new Date();
+    return a.getFullYear() !== b.getFullYear() || a.getMonth() !== b.getMonth() || a.getDate() !== b.getDate();
+  }
+  function fmtReviewDate(ts) {
+    return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function recheckTicket(id) {
+    saveReview(id, { action: "recheck" }, renderAll);
+  }
+  function recheckLabelHtml(id, rv) {
+    if (rv.rule || !(rv.reviewed && isPriorDay(rv.updatedAt))) return "";   // timed reviews come back on their own
+    return '<label class="review-toggle recheck-toggle"><input type="checkbox" data-recheck-id="' + id + '"> Reviewed ' + fmtReviewDate(rv.updatedAt) + ': recheck &amp; leave a fresh note?</label>';
+  }
+  function reviewHistoryHtml(rv) {
+    if (!rv.history.length) return "";
+    return '<details class="review-history"><summary>' + rv.history.length + ' earlier note' + (rv.history.length === 1 ? "" : "s") + '</summary>' +
+      rv.history.slice().reverse().map(function (h) {
+        return '<div class="review-history-item"><span class="review-history-date">' + fmtReviewDate(h.updatedAt) + '</span>' + (h.note ? escapeHtml(h.note) : '(no note)') + (h.by ? ' <span class="review-by">&middot; ' + escapeHtml(h.by) + '</span>' : '') + '</div>';
+      }).join("") + '</details>';
+  }
+  function reviewByHtml(rv) {
+    var s = rv.by && rv.updatedAt ? escapeHtml(rv.by) + ' &middot; ' + fmtReviewDate(rv.updatedAt) : '';
+    if (rv.reviewed && rv.backOn) s += ' &middot; back on the list ' + fmtReviewDate(rv.backOn);
+    else if (rv.reviewed && rv.rule === "day") s += ' &middot; reviewed today';
+    else if (rv.lapsed) s += ' &middot; review from ' + fmtReviewDate(rv.reviewedAt) + ' has lapsed';
+    return s ? '<span class="review-by">' + s + '</span>' : '';
+  }
+  function reviewControlsHtml(id, rv) {
+    return '<div class="ticket-item-review">' +
+      '<label class="review-toggle"><input type="checkbox" data-review-id="' + id + '"' + (rv.reviewed ? " checked" : "") + '> Reviewed</label>' +
+      '<input type="text" class="review-note-input" data-note-id="' + id + '" placeholder="Add a note&hellip;" value="' + escapeHtml(rv.note) + '">' +
+      reviewByHtml(rv) + recheckLabelHtml(id, rv) +
+      '</div>' + reviewHistoryHtml(rv);
+  }
+  // Compact variant for the main table's Notes cell, which renders the Reviewed checkbox and
+  // note input directly in their own <td>s rather than via reviewControlsHtml.
+  function tableRecheckHtml(id, rv) {
+    var recheck = recheckLabelHtml(id, rv);
+    return (recheck ? '<div class="table-recheck">' + recheck + '</div>' : "") + reviewHistoryHtml(rv);
+  }
+  // Delegated at the document level (not per-container) so it works everywhere a ticket
+  // renders - table, tier/assignee/status/reason/KPI drilldowns, GAL/Payrix/ES sections -
+  // without wiring a listener in each one. Reviewed/note edits only persist to localStorage
+  // (deliberately no re-render - would blow away focus/cursor position while typing a note);
+  // a recheck click DOES trigger a full re-render since it changes which controls should show.
+  document.addEventListener("change", function (e) {
+    var cb = e.target.closest("[data-review-id]");
+    if (cb) {
+      setReviewed(cb.getAttribute("data-review-id"), cb.checked);
+      var item = cb.closest(".ticket-item"); if (item) item.classList.toggle("reviewed", cb.checked);
+      var row = cb.closest("tr"); if (row) row.classList.toggle("reviewed", cb.checked);
+      return;
+    }
+    var rc = e.target.closest("[data-recheck-id]");
+    if (rc && rc.checked) {
+      recheckTicket(rc.getAttribute("data-recheck-id"));
+      renderAll();
+    }
+  });
+  document.addEventListener("input", function (e) {
+    var note = e.target.closest("[data-note-id]");
+    if (note) setNote(note.getAttribute("data-note-id"), note.value);
+  });
+
+  // ---- Recently-checked-in badge: read-only, reflects a real Zendesk internal note someone
+  // posted directly on the ticket (see buildRows - if the most recent
+  // comment of any kind on a ticket is a private note less than 24h old, it's suppressed
+  // from the flagged/needs-attention views until something new happens). No button, no
+  // write-back from this page - posting the note itself always happens in Zendesk.
+  function checkinControlsHtml(r) {
+    if (!r[RC.checkedInRecently]) return "";
+    return '<div class="checkin-status checkin-status-done">&#10003; Recently checked in' +
+      (r[RC.checkinNote] ? ': "' + escapeHtml(r[RC.checkinNote]) + '"' : '') + '</div>';
+  }
+
+  // ---- Shared ticket-item renderer (used by tier/assignee/status/reason drilldowns) ----
+  function renderTicketItemList(rows, opts) {
+    opts = opts || {};
+    var sorted = rows.slice().sort(function (a, b) { return b[RC.hours] - a[RC.hours]; });
+    if (!sorted.length) return '<div class="panel-empty">No tickets in this selection.</div>';
+    return sorted.map(function (r) {
+      var snippet = r[RC.snippet] ? '<div class="ticket-item-snippet">"' + escapeHtml(plainText(r[RC.snippet])) + '"</div>' : "";
+      var rv = getReview(r[RC.id]);
+      return '<div class="ticket-item' + ((rv.reviewed || r[RC.checkedInRecently]) ? " reviewed" : "") + '">' +
+        '<div class="ticket-item-head">' + ticketLink(r) +
+          '<span class="ticket-item-status">' + escapeHtml(STATUS_LABEL[r[RC.status]] || r[RC.status]) + '</span>' +
+          '<span class="flags-cell">' + chipsHtml(r) + '</span>' +
+        '</div>' +
+        '<div class="ticket-item-subject">' + escapeHtml(r[RC.subject] || "(no subject)") + '</div>' +
+        '<div class="ticket-item-meta">' + escapeHtml(whoLabel(r)) + (opts.showAssignee ? ' &middot; assigned to ' + escapeHtml(r[RC.assignee]) : '') + ' &middot; ' + fmtHours(r[RC.hours]) + ' since last activity</div>' +
+        snippet +
+        reviewControlsHtml(r[RC.id], rv) +
+        checkinControlsHtml(r) +
+        '</div>';
+    }).join("");
+  }
+
+  // ---- KPIs ----
+  var KPI_ROW_SETS = {};
+  var activeKpiKey = null;
+
+  function renderKPIs() {
+    var noReply = flagged.filter(function (r) { return r[RC.flagNoReply]; });
+    // Heavy back-and-forth isn't urgent by itself, so it comes from workingRows, not flagged.
+    var backforthAll = workingRows.filter(function (r) { return r[RC.flagBackforth]; });
+    var backforth = backforthAll.filter(function (r) { return !snoozed(String(r[RC.id])); });
+    var urgent = flagged.filter(function (r) { return r[RC.hours] <= 48; });
+    var aging = flagged.filter(function (r) { return r[RC.hours] > 48 && r[RC.hours] <= 168; });
+    var stale = flagged.filter(function (r) { return r[RC.hours] > 168; });
+    var galRows = ROWS.filter(function (r) { return r[RC.gal]; });
+    var payrixRows = ROWS.filter(function (r) { return r[RC.payrixEsc]; });
+    var processorRows = ROWS.filter(function (r) { return r[RC.fromProcessor]; });
+    var outsideRows = ROWS.filter(function (r) { return !r[RC.inGroup]; });
+    var merchantRows = ROWS.filter(function (r) { return merchantsOf(r).some(function (x) { return merchantProblem(x[1]); }); });
+    var checkedInRows = workingRows.filter(function (r) { return r[RC.checkedInRecently]; });
+
+    KPI_ROW_SETS = { open: ROWS, flagged: flagged, urgent: urgent, aging: aging, stale: stale, noReply: noReply, backforth: backforth,
+      payrix: payrixRows, processor: processorRows, gal: galRows, outside: outsideRows, merchant: merchantRows, checkedIn: checkedInRows };
+
+    var tiles = [
+      { key: "open", label: "Open tickets", value: fmtNum(ROWS.length), sub: "not yet Solved" },
+      { key: "flagged", label: "Flagged", value: fmtNum(flagged.length), sub: (ROWS.length ? Math.round(flagged.length / ROWS.length * 100) : 0) + "% of open" },
+      { key: "urgent", label: "Needs attention now", value: fmtNum(urgent.length), sub: "≤48h since activity", crit: urgent.length > 0 },
+      { key: "aging", label: "Aging", value: fmtNum(aging.length), sub: "2–7 days" },
+      { key: "stale", label: "Long-stale backlog", value: fmtNum(stale.length), sub: "7+ days" },
+      { key: "noReply", label: "No agent reply yet", value: fmtNum(noReply.length), sub: "never touched" },
+      { key: "backforth", label: "Heavy back-and-forth", value: fmtNum(backforth.length), sub: "10+ comments, not urgent by itself" + (backforthAll.length > backforth.length ? " · " + (backforthAll.length - backforth.length) + " reviewed this week" : "") },
+      { key: "payrix", label: "Escalated to Payrix", value: fmtNum(payrixRows.length), sub: "waiting on Payrix" },
+      { key: "processor", label: "From Payrix / Worldpay", value: fmtNum(processorRows.length), sub: "Boarding, Risk and other processor mail" },
+      { key: "merchant", label: "Merchant needs a look", value: fmtNum(merchantRows.length), sub: "frozen, closed, inactive or idle " + IDLE_DAYS + "d+", crit: merchantRows.length > 0 },
+      { key: "gal", label: "With Dev Team (GAL)", value: fmtNum(galRows.length), sub: (ROWS.length ? Math.round(galRows.length / ROWS.length * 100) : 0) + "% of open" },
+      { key: "outside", label: "Outside the ePayment group", value: fmtNum(outsideRows.length), sub: "ePayments module, other groups" },
+      { key: "checkedIn", label: "Recently checked in", value: fmtNum(checkedInRows.length), sub: "internal note, last 24h" },
+      // ES_ROWS has a different shape (Jira issues), so this tile scrolls to its own section instead of a drilldown.
+      { key: "es", label: "ES Escalations (ePayments)", value: fmtNum(ES_ROWS.length), sub: "component ePayments, BQE", scrollTo: "esSection" }
+    ];
+
+    document.getElementById("kpiGrid").innerHTML = tiles.map(function (t) {
+      var active = activeKpiKey === t.key;
+      var attr = t.scrollTo ? 'data-kpi-scroll="' + t.scrollTo + '"' : 'data-kpi-key="' + t.key + '"';
+      return '<button type="button" class="kpi' + (t.crit ? ' critical' : '') + (active ? ' active' : '') + '" ' + attr + '>' +
+        '<div class="kpi-label">' + t.label + '</div>' +
+        '<div class="kpi-value' + (t.crit ? ' crit' : '') + '">' + t.value + '</div>' +
+        '<div class="kpi-sub">' + t.sub + '</div></button>';
+    }).join("");
+
+    renderKpiDrilldown();
+  }
+
+  function renderKpiDrilldown() {
+    var wrap = document.getElementById("kpiDrilldownWrap");
+    var rows = activeKpiKey && KPI_ROW_SETS[activeKpiKey];
+    if (!rows) { wrap.innerHTML = ""; return; }
+    wrap.innerHTML = '<div class="panel kpi-drilldown">' +
+      '<div class="section-head">' +
+        '<h2 class="section-title">' + fmtNum(rows.length) + ' ticket' + (rows.length === 1 ? "" : "s") + '</h2>' +
+        '<button type="button" class="pill-toggle" data-kpi-close="1">Close</button>' +
+      '</div>' +
+      '<div style="margin-top:10px;">' + renderTicketItemList(rows, { showAssignee: true }) + '</div>' +
+      '</div>';
+  }
+
+  document.getElementById("kpiGrid").addEventListener("click", function (e) {
+    var scrollBtn = e.target.closest("[data-kpi-scroll]");
+    if (scrollBtn) {
+      var target = document.getElementById(scrollBtn.getAttribute("data-kpi-scroll"));
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    var btn = e.target.closest("[data-kpi-key]");
+    if (!btn) return;
+    var key = btn.getAttribute("data-kpi-key");
+    activeKpiKey = activeKpiKey === key ? null : key;
+    renderKPIs();
+    if (activeKpiKey) document.getElementById("kpiDrilldownWrap").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  document.getElementById("kpiDrilldownWrap").addEventListener("click", function (e) {
+    if (e.target.closest("[data-kpi-close]")) { activeKpiKey = null; renderKPIs(); }
+  });
+
+  // ---- Generic bar-row chart ----
+  function renderBarChart(elId, items, expandedMap, opts) {
+    opts = opts || {};
+    var el = document.getElementById(elId);
+    if (!items.length) { el.innerHTML = '<div class="empty-state">' + (opts.emptyText || "No flagged tickets right now.") + '</div>'; return; }
+    var total = items.reduce(function (s, it) { return s + it.count; }, 0);
+    var max = Math.max.apply(null, items.map(function (it) { return it.count; }).concat([1]));
+    el.innerHTML = items.map(function (it) {
+      var pct = Math.round((it.count / max) * 100);
+      var share = total ? Math.round((it.count / total) * 100) : 0;
+      var open = !!expandedMap[it.key];
+      var row = '<div class="bar-row clickable" data-bar-key="' + escapeHtml(it.key) + '">' +
+        '<div class="bar-label"><span class="bar-chevron' + (open ? ' open' : '') + '">&#9656;</span>' +
+        '<span class="swatch" style="background:var(' + it.colorVar + ')"></span>' + escapeHtml(it.label) + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; background:var(' + it.colorVar + ')"></div></div>' +
+        '<div class="bar-figs"><b>' + fmtNum(it.count) + '</b> &middot; ' + share + '%</div>' +
+        '</div>';
+      var copyBtn = it.copyable ? '<div class="agent-toolbar"><button type="button" class="copy-btn" data-copy-agent="' + escapeHtml(it.key) + '">Copy list</button></div>' : '';
+      var drill = open ? '<div class="ticket-drilldown">' + copyBtn + renderTicketItemList(it.rows) + '</div>' : '';
+      return row + drill;
+    }).join("");
+  }
+
+  function wireBarChartToggle(elId, expandedMap, renderFn, copyCtx) {
+    document.getElementById(elId).addEventListener("click", function (e) {
+      var copyBtn = e.target.closest("[data-copy-agent]");
+      if (copyBtn && copyCtx) {
+        var key = copyBtn.getAttribute("data-copy-agent");
+        var groups = copyCtx.groups(), names = copyCtx.names();
+        var rows = (groups[key] || []).slice().sort(function (a, b) { return b[RC.hours] - a[RC.hours]; });
+        var text = rows.map(function (r) {
+          return "#" + r[RC.id] + " " + r[RC.url] + "\n  " + (r[RC.subject] || "(no subject)") +
+            "\n  " + whoLabel(r) + " · " + fmtHours(r[RC.hours]) + " since activity · " +
+            flagsOf(r).map(function (f) { return f.label; }).join(", ");
+        }).join("\n\n");
+        var header = copyCtx.header(rows.length, names[key] || key);
+        var full = header + text;
+        function flash(ok) {
+          copyBtn.textContent = ok ? "Copied!" : "Copy failed";
+          copyBtn.classList.toggle("copied", ok);
+          setTimeout(function () { copyBtn.textContent = "Copy list"; copyBtn.classList.remove("copied"); }, 1800);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(full).then(function () { flash(true); }).catch(function () { flash(false); });
+        } else {
+          // Fallback for contexts without the async Clipboard API (older/insecure contexts).
+          try {
+            var ta = document.createElement("textarea");
+            ta.value = full; ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            var ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            flash(ok);
+          } catch (err) { flash(false); }
+        }
+        return;
+      }
+      var row = e.target.closest("[data-bar-key]");
+      if (!row) return;
+      var k = row.getAttribute("data-bar-key");
+      expandedMap[k] = !expandedMap[k];
+      renderFn();
+    });
+  }
+
+  // ---- Tier chart ----
+  var expandedTier = {};
+  function renderTierChart() {
+    var urgent = flagged.filter(function (r) { return r[RC.hours] <= 48; });
+    var aging = flagged.filter(function (r) { return r[RC.hours] > 48 && r[RC.hours] <= 168; });
+    var stale = flagged.filter(function (r) { return r[RC.hours] > 168; });
+    var items = [
+      { key: "urgent", label: "Needs attention now", count: urgent.length, rows: urgent, colorVar: "--critical" },
+      { key: "aging", label: "Aging (2-7 days)", count: aging.length, rows: aging, colorVar: "--warning" },
+      { key: "stale", label: "Long-stale backlog (7+ days)", count: stale.length, rows: stale, colorVar: "--ink-3" }
+    ].filter(function (it) { return it.count > 0; });
+    renderBarChart("tierChart", items, expandedTier);
+  }
+
+  // ---- Assignee chart (export per agent) ----
+  var expandedAssignee = {};
+  var agentGroups = {}, agentNames = {};
+  var ASSIGNEE_PALETTE = ["--accent", "--seg-premium", "--seg-low", "--warning", "--good", "--critical", "--ink-3"];
+  function renderAssigneeChart() {
+    agentGroups = {};
+    flagged.forEach(function (r) {
+      var name = r[RC.assignee] || "Unassigned";
+      var key = "a:" + name;
+      agentNames[key] = name;
+      (agentGroups[key] = agentGroups[key] || []).push(r);
+    });
+    var items = Object.keys(agentGroups).map(function (k, i) {
+      return { key: k, label: agentNames[k], count: agentGroups[k].length, rows: agentGroups[k], colorVar: ASSIGNEE_PALETTE[i % ASSIGNEE_PALETTE.length], copyable: true };
+    }).sort(function (a, b) { return b.count - a.count; });
+    renderBarChart("assigneeChart", items, expandedAssignee);
+  }
+
+  // ---- Heavy back-and-forth, by assignee (still worth surfacing by
+  // assignee, but not part of `flagged`/urgent - sourced from workingRows, not flagged) ----
+  var expandedBackforthAssignee = {};
+  var backforthAgentGroups = {}, backforthAgentNames = {};
+  // A reviewed GAL / back-and-forth ticket sits in a folded "reviewed this week" list (notes still editable there)
+  // until 7 days after its review, then returns to the main list on its own.
+  var SNOOZE_OPEN = {};
+  function snoozedHtml(key, rows) {
+    if (!rows.length) return "";
+    return '<details class="panel review-history" data-snooze="' + key + '" style="margin-top:10px;"' + (SNOOZE_OPEN[key] ? " open" : "") + '><summary>' +
+      rows.length + ' reviewed in the last 7 days, each comes back a week after its review</summary>' +
+      '<div style="margin-top:8px;">' + renderTicketItemList(rows, { showAssignee: true }) + '</div></details>';
+  }
+  document.addEventListener("toggle", function (e) {
+    var d = e.target; if (d && d.getAttribute && d.getAttribute("data-snooze")) SNOOZE_OPEN[d.getAttribute("data-snooze")] = d.open;
+  }, true);
+  function renderBackforthAssigneeChart() {
+    backforthAgentGroups = {};
+    var all = workingRows.filter(function (r) { return r[RC.flagBackforth]; });
+    document.getElementById("backforthSnoozed").innerHTML = snoozedHtml("backforth", all.filter(function (r) { return snoozed(String(r[RC.id])); }));
+    all.filter(function (r) { return !snoozed(String(r[RC.id])); }).forEach(function (r) {
+      var name = r[RC.assignee] || "Unassigned";
+      var key = "a:" + name;
+      backforthAgentNames[key] = name;
+      (backforthAgentGroups[key] = backforthAgentGroups[key] || []).push(r);
+    });
+    var items = Object.keys(backforthAgentGroups).map(function (k, i) {
+      return { key: k, label: backforthAgentNames[k], count: backforthAgentGroups[k].length, rows: backforthAgentGroups[k], colorVar: ASSIGNEE_PALETTE[i % ASSIGNEE_PALETTE.length], copyable: true };
+    }).sort(function (a, b) { return b.count - a.count; });
+    renderBarChart("backforthAssigneeChart", items, expandedBackforthAssignee, { emptyText: "No heavy back-and-forth tickets right now." });
+  }
+
+  // ---- Status chart ----
+  var expandedStatus = {};
+  function renderStatusChart() {
+    var groups = {};
+    workingRows.forEach(function (r) { (groups[r[RC.status]] = groups[r[RC.status]] || []).push(r); });
+    var items = Object.keys(groups).map(function (s) {
+      return { key: s, label: STATUS_LABEL[s] || s, count: groups[s].length, rows: groups[s], colorVar: STATUS_VAR[s] || "--ink-3" };
+    }).sort(function (a, b) { return b.count - a.count; });
+    renderBarChart("statusChart", items, expandedStatus);
+  }
+
+  // ---- Reason chart ----
+  // Heavy back-and-forth isn't listed here - it no longer makes a ticket "flagged" by itself,
+  // so it can't be one of `flagged`'s reasons. See the standalone "Heavy back-and-forth, by
+  // assignee" section for that signal.
+  var expandedReason = {};
+  function renderReasonChart() {
+    var noReply = flagged.filter(function (r) { return r[RC.flagNoReply]; });
+    var awaiting = flagged.filter(function (r) { return r[RC.flagAwaiting]; });
+    var items = [
+      { key: "noreply", label: "No agent reply yet", count: noReply.length, rows: noReply, colorVar: "--critical" },
+      { key: "awaiting", label: "Awaiting our reply", count: awaiting.length, rows: awaiting, colorVar: "--warning" }
+    ].filter(function (it) { return it.count > 0; });
+    renderBarChart("reasonChart", items, expandedReason);
+  }
+
+  // ---- Ticket Status Detail and group charts (every open ticket) ----
+  var expandedDetail = {}, expandedGroup = {};
+  var DETAIL_PALETTE = ["--accent", "--warning", "--seg-premium", "--seg-low", "--good", "--critical", "--ink-3"];
+  function renderGroupedChart(elId, keyFn, labelFn, expanded) {
+    var groups = {};
+    ROWS.forEach(function (r) { var k = keyFn(r); (groups[k] = groups[k] || []).push(r); });
+    var items = Object.keys(groups).map(function (k) { return { key: k, label: labelFn(k), count: groups[k].length, rows: groups[k] }; })
+      .sort(function (a, b) { return b.count - a.count; });
+    items.forEach(function (it, i) { it.colorVar = DETAIL_PALETTE[i % DETAIL_PALETTE.length]; });
+    renderBarChart(elId, items, expanded, { emptyText: "No open tickets." });
+  }
+  function renderDetailChart() { renderGroupedChart("detailChart", function (r) { return r[RC.statusDetail] || ""; }, detailLabel, expandedDetail); }
+  function renderGroupChart() { renderGroupedChart("groupChart", function (r) { return r[RC.group] || "(no group)"; }, function (k) { return k; }, expandedGroup); }
+
+  wireBarChartToggle("tierChart", expandedTier, renderTierChart);
+  wireBarChartToggle("assigneeChart", expandedAssignee, renderAssigneeChart, {
+    groups: function () { return agentGroups; },
+    names: function () { return agentNames; },
+    header: function (n, name) { return "ePayments Watch: " + n + " flagged ticket(s) assigned to " + name + " (" + GENERATED_AT + ")\n\n"; }
+  });
+  wireBarChartToggle("statusChart", expandedStatus, renderStatusChart);
+  wireBarChartToggle("reasonChart", expandedReason, renderReasonChart);
+  wireBarChartToggle("detailChart", expandedDetail, renderDetailChart);
+  wireBarChartToggle("groupChart", expandedGroup, renderGroupChart);
+  wireBarChartToggle("backforthAssigneeChart", expandedBackforthAssignee, renderBackforthAssigneeChart, {
+    groups: function () { return backforthAgentGroups; },
+    names: function () { return backforthAgentNames; },
+    header: function (n, name) { return "ePayments Watch: " + n + " heavy back-and-forth ticket(s) assigned to " + name + " (" + GENERATED_AT + ")\n\n"; }
+  });
+
+  // ---- Where to Focus ----
+  var SUGGESTIONS_STORAGE_KEY = "epaymentsWatch.completedSuggestions.v1";
+  function loadCompletedSuggestions() { try { return JSON.parse(localStorage.getItem(SUGGESTIONS_STORAGE_KEY)) || {}; } catch (e) { return {}; } }
+  function saveCompletedSuggestions() { try { localStorage.setItem(SUGGESTIONS_STORAGE_KEY, JSON.stringify(completedSuggestions)); } catch (e) {} }
+  var completedSuggestions = loadCompletedSuggestions();
+  var suggestionsView = "outstanding";
+
+  function fmtSuggestionDate(ms) { if (!ms) return ""; return new Date(ms).toISOString().split("T")[0]; }
+
+  function buildSuggestionCandidates() {
+    return flagged.map(function (r) {
+      var score = r[RC.hours];
+      if (r[RC.flagNoReply]) score += 200;
+      if (r[RC.flagBackforth]) score += 40;
+      var reasons = flagsOf(r).map(function (f) { return f.label; }).join(", ");
+      return {
+        key: "ticket:" + r[RC.id],
+        score: score,
+        text: '<a href="' + r[RC.url] + '" target="_blank" rel="noopener">#' + r[RC.id] + '</a> <b>' + escapeHtml(r[RC.subject] || "(no subject)") + '</b>: ' +
+          escapeHtml(whoLabel(r)) + ', assigned to ' + escapeHtml(r[RC.assignee]) + ', ' + fmtHours(r[RC.hours]) + ' since activity (' + reasons + ')'
+      };
+    }).sort(function (a, b) { return b.score - a.score; });
+  }
+
+  function renderSuggestions() {
+    var el = document.getElementById("suggestionsPanel");
+    if (suggestionsView === "completed") {
+      var completedList = Object.keys(completedSuggestions).map(function (k) { return completedSuggestions[k]; })
+        .sort(function (a, b) { return b.completedAt - a.completedAt; });
+      document.getElementById("suggestionsCount").textContent = completedList.length.toLocaleString() + " completed";
+      if (!completedList.length) { el.innerHTML = '<div class="panel-empty">Nothing marked completed yet.</div>'; return; }
+      el.innerHTML = completedList.map(function (s) {
+        return '<div class="suggestion-item">' +
+          '<span class="suggestion-check done">&#10003;</span>' +
+          '<div class="suggestion-body"><div class="suggestion-text">' + s.text + '</div>' +
+            '<div class="suggestion-meta">Completed ' + fmtSuggestionDate(s.completedAt) + '</div></div>' +
+          '<button class="suggestion-restore" data-restore-key="' + escapeHtml(s.key) + '">Restore</button>' +
+          '</div>';
+      }).join("");
+    } else {
+      var all = buildSuggestionCandidates().filter(function (c) { return !completedSuggestions[c.key]; }).slice(0, 10);
+      document.getElementById("suggestionsCount").textContent = all.length.toLocaleString() + " outstanding";
+      if (!all.length) { el.innerHTML = '<div class="panel-empty">Nothing outstanding right now.</div>'; return; }
+      el.innerHTML = all.map(function (s) {
+        return '<div class="suggestion-item">' +
+          '<span class="suggestion-check" data-complete-key="' + escapeHtml(s.key) + '" data-complete-text="' + escapeHtml(s.text) + '"></span>' +
+          '<div class="suggestion-body"><div class="suggestion-text">' + s.text + '</div></div>' +
+          '</div>';
+      }).join("");
+    }
+  }
+
+  document.getElementById("suggestionsViewToggle").addEventListener("click", function () {
+    suggestionsView = suggestionsView === "outstanding" ? "completed" : "outstanding";
+    this.setAttribute("aria-pressed", String(suggestionsView === "completed"));
+    this.textContent = suggestionsView === "completed" ? "Show outstanding" : "Show completed";
+    renderSuggestions();
+  });
+  document.getElementById("suggestionsPanel").addEventListener("click", function (e) {
+    var check = e.target.closest("[data-complete-key]");
+    if (check) {
+      var key = check.getAttribute("data-complete-key");
+      completedSuggestions[key] = { key: key, text: check.getAttribute("data-complete-text"), completedAt: Date.now() };
+      saveCompletedSuggestions();
+      renderSuggestions();
+      return;
+    }
+    var restore = e.target.closest("[data-restore-key]");
+    if (restore) {
+      delete completedSuggestions[restore.getAttribute("data-restore-key")];
+      saveCompletedSuggestions();
+      renderSuggestions();
+    }
+  });
+
+  // ---- Main ticket table ----
+  var tableState = { filter: "other", search: "", sortKey: "hours", sortDir: "desc", page: 1, pageSize: 20 };
+
+  // "No flags" = tickets no other section lists: not needs-attention, not heavy back-and-forth.
+  function unflaggedRows() {
+    return workingRows.filter(function (r) { return !r[RC.needsAttention] && !r[RC.flagBackforth]; });
+  }
+
+  function tableRows() {
+    var rows = tableState.filter === "all" ? workingRows : unflaggedRows();
+    if (tableState.search) {
+      var q = tableState.search.toLowerCase();
+      rows = rows.filter(function (r) {
+        return (r[RC.subject] || "").toLowerCase().indexOf(q) !== -1 || (r[RC.requester] || "").toLowerCase().indexOf(q) !== -1 || (r[RC.org] || "").toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    var key = tableState.sortKey, dir = tableState.sortDir === "asc" ? 1 : -1;
+    var sortFns = {
+      id: function (r) { return r[RC.id]; },
+      subject: function (r) { return (r[RC.subject] || "").toLowerCase(); },
+      requester: function (r) { return whoLabel(r).toLowerCase(); },
+      assignee: function (r) { return (r[RC.assignee] || "").toLowerCase(); },
+      status: function (r) { return r[RC.status]; },
+      hours: function (r) { return r[RC.hours]; },
+      comments: function (r) { return r[RC.comments]; },
+      flags: function (r) { return flagsOf(r).length; },
+      reviewed: function (r) { return getReview(r[RC.id]).reviewed ? 1 : 0; }
+    };
+    var fn = sortFns[key] || sortFns.hours;
+    rows = rows.slice().sort(function (a, b) { var av = fn(a), bv = fn(b); return av < bv ? -1 * dir : av > bv ? 1 * dir : 0; });
+    return rows;
+  }
+
+  function renderTable() {
+    var rows = tableRows();
+    var otherCount = unflaggedRows().length;
+    document.getElementById("tableCount").textContent = fmtNum(otherCount) + " with no flags · " + fmtNum(workingRows.length) + " open in total";
+    var totalPages = Math.max(1, Math.ceil(rows.length / tableState.pageSize));
+    if (tableState.page > totalPages) tableState.page = totalPages;
+    var start = (tableState.page - 1) * tableState.pageSize;
+    var pageRows = rows.slice(start, start + tableState.pageSize);
+
+    var tbody = document.getElementById("ticketTableBody");
+    if (!pageRows.length) {
+      tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state">No tickets match this filter.</div></td></tr>';
+    } else {
+      tbody.innerHTML = pageRows.map(function (r) {
+        var rv = getReview(r[RC.id]);
+        return '<tr' + ((rv.reviewed || r[RC.checkedInRecently]) ? ' class="reviewed"' : "") + '>' +
+          '<td>' + ticketLink(r) + '</td>' +
+          '<td class="subject-cell">' + escapeHtml(r[RC.subject] || "(no subject)") + '</td>' +
+          '<td>' + escapeHtml(whoLabel(r)) + '</td>' +
+          '<td>' + escapeHtml(r[RC.assignee]) + '</td>' +
+          '<td>' + escapeHtml(STATUS_LABEL[r[RC.status]] || r[RC.status]) + '</td>' +
+          '<td>' + fmtHours(r[RC.hours]) + '</td>' +
+          '<td>' + fmtNum(r[RC.comments]) + '</td>' +
+          '<td class="flags-cell">' + (chipsHtml(r) || '&mdash;') + '</td>' +
+          '<td><input type="checkbox" data-review-id="' + r[RC.id] + '"' + (rv.reviewed ? " checked" : "") + '></td>' +
+          '<td><input type="text" class="table-note-input" data-note-id="' + r[RC.id] + '" placeholder="Note&hellip;" value="' + escapeHtml(rv.note) + '">' + reviewByHtml(rv) + tableRecheckHtml(r[RC.id], rv) + '</td>' +
+          '<td>' + checkinControlsHtml(r) + '</td>' +
+          '</tr>';
+      }).join("");
+    }
+
+    document.querySelectorAll("#ticketTable thead th").forEach(function (th) {
+      th.classList.toggle("sorted", th.getAttribute("data-key") === tableState.sortKey);
+      var arrow = th.querySelector(".arrow");
+      if (!arrow) return;
+      if (th.getAttribute("data-key") === tableState.sortKey) arrow.textContent = tableState.sortDir === "asc" ? "▲" : "▼";
+      else arrow.textContent = "▾";
+    });
+
+    var pager = document.getElementById("ticketPager");
+    if (rows.length <= tableState.pageSize) { pager.innerHTML = ""; }
+    else {
+      pager.innerHTML =
+        '<button type="button" data-page="prev"' + (tableState.page <= 1 ? " disabled" : "") + '>Prev</button>' +
+        '<span>Showing ' + (start + 1) + '-' + Math.min(start + tableState.pageSize, rows.length) + ' of ' + rows.length + '</span>' +
+        '<button type="button" data-page="next"' + (tableState.page >= totalPages ? " disabled" : "") + '>Next</button>';
+    }
+  }
+
+  document.querySelectorAll('[data-table-filter]').forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll('[data-table-filter]').forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+      btn.setAttribute("aria-pressed", "true");
+      tableState.filter = btn.getAttribute("data-table-filter");
+      tableState.page = 1;
+      renderTable();
+    });
+  });
+  document.getElementById("tableSearch").addEventListener("input", function () {
+    tableState.search = this.value;
+    tableState.page = 1;
+    renderTable();
+  });
+  document.querySelectorAll("#ticketTable thead th").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var key = th.getAttribute("data-key");
+      if (!key) return;
+      if (tableState.sortKey === key) tableState.sortDir = tableState.sortDir === "asc" ? "desc" : "asc";
+      else { tableState.sortKey = key; tableState.sortDir = key === "subject" || key === "requester" || key === "assignee" ? "asc" : "desc"; }
+      renderTable();
+    });
+  });
+  document.getElementById("ticketPager").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-page]");
+    if (!btn) return;
+    if (btn.getAttribute("data-page") === "prev") tableState.page--; else tableState.page++;
+    renderTable();
+  });
+
+  // ---- Trend chart ----
+  function renderTrendChart() {
+    var el = document.getElementById("trendChart");
+    if (HISTORY.length < 2) {
+      el.innerHTML = '<div class="empty-state">The trend builds up over time: one point per hour on weekdays.</div>';
+      document.getElementById("trendLegend").innerHTML = "";
+      return;
+    }
+    var SERIES = [
+      { idx: 1, label: "Open", colorVar: "--ink-3" },
+      { idx: 2, label: "Flagged", colorVar: "--critical" },
+      { idx: 6, label: "Escalated to Payrix", colorVar: "--warning" },
+      { idx: 7, label: "From Payrix/Worldpay", colorVar: "--seg-low" }
+    ];
+    document.getElementById("trendLegend").innerHTML = SERIES.map(function (s) {
+      return '<span><span class="dot" style="background:var(' + s.colorVar + ')"></span>' + s.label + '</span>';
+    }).join("");
+
+    var W = 1080, H = 260, padL = 40, padR = 16, padT = 14, padB = 30;
+    var plotW = W - padL - padR, plotH = H - padT - padB;
+    var n = HISTORY.length;
+    var xStep = n > 1 ? plotW / (n - 1) : 0;
+    var maxVal = 0;
+    HISTORY.forEach(function (row) { maxVal = Math.max(maxVal, row[1], row[2], row[6] || 0, row[7] || 0); });
+    maxVal = Math.ceil((maxVal * 1.15) / 5) * 5 || 5;
+
+    function x(i) { return padL + i * xStep; }
+    function y(v) { return padT + plotH - (v / maxVal) * plotH; }
+
+    var gridN = 4, gridLines = "", gridLabels = "";
+    for (var g = 0; g <= gridN; g++) {
+      var val = Math.round((maxVal / gridN) * g);
+      var gy = y(val);
+      gridLines += '<line class="trend-gridline" x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" />';
+      gridLabels += '<text class="trend-axis-label" x="' + (padL - 8) + '" y="' + (gy + 3) + '" text-anchor="end">' + val + '</text>';
+    }
+    var labelEvery = Math.max(1, Math.ceil(n / 8));
+    var xLabels = "";
+    HISTORY.forEach(function (row, i) {
+      if (i % labelEvery !== 0 && i !== n - 1) return;
+      var d = new Date(row[0]);
+      xLabels += '<text class="trend-axis-label" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + (d.getMonth() + 1) + '/' + d.getDate() + '</text>';
+    });
+
+    var paths = SERIES.map(function (s) {
+      var d = HISTORY.map(function (row, i) { return (i === 0 ? "M" : "L") + x(i) + "," + y(row[s.idx]); }).join(" ");
+      return '<path d="' + d + '" fill="none" stroke="var(' + s.colorVar + ')" stroke-width="2" />';
+    });
+
+    el.innerHTML = '<svg class="trend-svg" viewBox="0 0 ' + W + ' ' + H + '">' + gridLines + paths.join("") + gridLabels + xLabels + '</svg>';
+    document.getElementById("trendNote").textContent = n + " hourly points of history";
+  }
+
+  // ---- GAL / Dev Team section ----
+  function renderGalSection() {
+    var galRows = ROWS.filter(function (r) { return r[RC.gal]; });
+    var active = galRows.filter(function (r) { return !snoozed(String(r[RC.id])); });
+    var noSr = galRows.filter(function (r) { return flagsOf(r).some(function (f) { return f.key.indexOf("nosr:") === 0; }); });
+    document.getElementById("galNote").textContent = fmtNum(galRows.length) + " of " + fmtNum(ROWS.length) + " open tickets reference a GAL Jira ticket" +
+      (noSr.length ? " · " + noSr.length + " missing a Support Ranking" : "") + " · a review hides a ticket here for 7 days";
+    document.getElementById("galList").innerHTML = (active.length ? renderTicketItemList(active, { showAssignee: true })
+      : '<div class="panel-empty">' + (galRows.length ? "Every GAL ticket was reviewed in the last 7 days." : "No open ePayments tickets reference a GAL ticket.") + '</div>') +
+      snoozedHtml("gal", galRows.filter(function (r) { return snoozed(String(r[RC.id])); }));
+  }
+
+  // ---- Escalated to Payrix: open now, plus the last 180 days (solved included) ----
+  // ep_board() payrix_esc: [0 id, 1 subject, 2 status, 3 org, 4 assignee, 5 created, 6 solvedAt, 7 firstResolutionMin, 8 group]
+  var OPEN_STATUSES = { "new": 1, "open": 1, "pending": 1, "hold": 1 };
+  function renderPayrixSection() {
+    var openRows = ROWS.filter(function (r) { return r[RC.payrixEsc]; });
+    var active = openRows.filter(function (r) { return !snoozed(String(r[RC.id])); });
+    var hist = (DATA && DATA.payrix_esc) || [];
+    function since(days) { return hist.filter(function (h) { return NOW - Date.parse(h[5]) <= days * 86400000; }); }
+    var solved = hist.filter(function (h) { return h[6]; });
+    var solveDays = solved.map(function (h) { return (Date.parse(h[6]) - Date.parse(h[5])) / 86400000; });
+    var med = solveDays.length ? solveDays.slice().sort(function (a, b) { return a - b; })[Math.floor((solveDays.length - 1) / 2)] : null;
+    var tiles = [
+      { label: "Open now", value: fmtNum(openRows.length), sub: "waiting on Payrix", crit: openRows.some(function (r) { return r[RC.hoursCreated] > 7 * 24; }) },
+      { label: "Last 30 days", value: fmtNum(since(30).length), sub: "tickets escalated" },
+      { label: "Last 90 days", value: fmtNum(since(90).length), sub: "tickets escalated" },
+      { label: "Median to solve", value: med === null ? "n/a" : (med < 1 ? "<1d" : Math.round(med) + "d"), sub: "created to solved, " + solved.length + " solved" }
+    ];
+    document.getElementById("payrixTiles").innerHTML = tiles.map(function (t) {
+      return '<div class="q-tile"><div class="kpi-label">' + t.label + '</div><div class="kpi-value' + (t.crit ? " crit" : "") + '">' + t.value + '</div><div class="kpi-sub">' + t.sub + '</div></div>';
+    }).join("");
+    document.getElementById("payrixNote").textContent = "Ticket Status Detail = Escalated::External Teams::Payrix · a review hides an open one for 7 days";
+    document.getElementById("payrixOpen").innerHTML = active.length ? renderTicketItemList(active, { showAssignee: true })
+      : '<div class="panel-empty">' + (openRows.length ? "Every open Payrix escalation was reviewed in the last 7 days." : "No open tickets are escalated to Payrix right now.") + '</div>';
+    document.getElementById("payrixSnoozed").innerHTML = snoozedHtml("payrix", openRows.filter(function (r) { return snoozed(String(r[RC.id])); }));
+    document.getElementById("payrixHistorySummary").textContent = "Last 180 days: " + hist.length + " ticket" + (hist.length === 1 ? "" : "s") + " escalated to Payrix";
+    document.getElementById("payrixHistoryTable").innerHTML = hist.length ? '<table class="call-table"><thead><tr><th>Ticket</th><th>Subject</th><th>Organization</th><th>Assignee</th><th>Created</th><th>Solved</th><th>Days</th></tr></thead><tbody>' +
+      hist.map(function (h) {
+        var c = Date.parse(h[5]), s = h[6] ? Date.parse(h[6]) : null, open = OPEN_STATUSES[h[2]];
+        var days = ((s || NOW) - c) / 86400000;
+        return '<tr><td><a href="https://bqe.zendesk.com/agent/tickets/' + h[0] + '" target="_blank" rel="noopener">#' + h[0] + '</a></td>' +
+          '<td>' + escapeHtml(h[1] || "(no subject)") + (h[8] && h[8] !== EP_GROUP ? '<div class="review-by">' + escapeHtml(h[8]) + '</div>' : '') + '</td>' +
+          '<td>' + escapeHtml(h[3] || "") + '</td><td>' + escapeHtml(h[4] || "Unassigned") + '</td>' +
+          '<td>' + escapeHtml(ptDayFmt.format(new Date(c))) + '</td>' +
+          '<td>' + (s ? escapeHtml(ptDayFmt.format(new Date(s))) : open ? '<span class="chip chip-payrix">Open</span>' : escapeHtml(STATUS_LABEL[h[2]] || h[2])) + '</td>' +
+          '<td style="font-variant-numeric:tabular-nums;">' + (days < 1 ? "<1" : Math.round(days)) + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<div class="panel-empty">No tickets escalated to Payrix in the last 180 days.</div>';
+  }
+
+  // ---- From Payrix / Worldpay: requests the processor sent us (Boarding, Risk, ...) ----
+  function renderProcessorSection() {
+    var rows = ROWS.filter(function (r) { return r[RC.fromProcessor]; });
+    document.getElementById("processorNote").textContent = fmtNum(rows.length) + " open ticket" + (rows.length === 1 ? "" : "s") +
+      " from Payrix Boarding, Risk or other processor addresses · still counted in the flagged views";
+    document.getElementById("processorList").innerHTML = rows.length ? renderTicketItemList(rows, { showAssignee: true })
+      : '<div class="panel-empty">No open tickets from Payrix or Worldpay right now.</div>';
+  }
+
+  // ---- ES Escalations (ePayments) ----
+  function renderEsSection() {
+    document.getElementById("esNote").textContent =
+      fmtNum(ES_ROWS.length) + " open ES " + (ES_ROWS.length === 1 ? "issue" : "issues") + " with component ePayments, BQE" +
+      " · reviews last for the day, so open ones come back every morning";
+    var listEl = document.getElementById("esList");
+    if (!ES_ROWS.length) { listEl.innerHTML = '<div class="panel-empty">No open ES escalations for ePayments right now.</div>'; return; }
+    var sorted = ES_ROWS.slice().sort(function (a, b) { return (b[ES_RC.daysOpen] || 0) - (a[ES_RC.daysOpen] || 0); });
+    listEl.innerHTML = sorted.map(function (r) {
+      var id = "jira:" + r[ES_RC.key];
+      var rv = getReview(id);
+      var linkedHtml = r[ES_RC.linkedTicketId]
+        ? 'Linked from <a href="https://bqe.zendesk.com/agent/tickets/' + r[ES_RC.linkedTicketId] + '" target="_blank" rel="noopener">Zendesk #' + r[ES_RC.linkedTicketId] + '</a> (' + escapeHtml(STATUS_LABEL[r[ES_RC.linkedTicketStatus]] || r[ES_RC.linkedTicketStatus] || "") + ')'
+        : 'No linked open ePayments ticket found';
+      return '<div class="ticket-item' + (rv.reviewed ? " reviewed" : "") + '">' +
+        '<div class="ticket-item-head">' +
+          '<a href="' + r[ES_RC.url] + '" target="_blank" rel="noopener">' + escapeHtml(r[ES_RC.key]) + '</a>' +
+          '<span class="ticket-item-status">' + escapeHtml(r[ES_RC.status]) + '</span>' +
+          '<span class="flags-cell"><span class="chip chip-es">' + escapeHtml(r[ES_RC.priority] || "") + '</span>' + (r[ES_RC.overdue] ? ' <span class="chip chip-awaiting">Overdue</span>' : '') + '</span>' +
+        '</div>' +
+        '<div class="ticket-item-subject">' + escapeHtml(r[ES_RC.summary] || "(no summary)") + '</div>' +
+        '<div class="ticket-item-meta">' + (r[ES_RC.company] ? escapeHtml(r[ES_RC.company]) : "&mdash;") + ' &middot; ' + escapeHtml(r[ES_RC.assignee]) + ' &middot; ' + fmtNum(r[ES_RC.daysOpen]) + 'd open</div>' +
+        '<div class="ticket-item-meta">' + linkedHtml + '</div>' +
+        reviewControlsHtml(id, rv) +
+        '</div>';
+    }).join("");
+  }
+
+  // ---- Payrix merchant check: open tickets matched to a Payrix merchant, problems first ----
+  function renderMerchantSection() {
+    var s = (DATA && DATA.sync) || {}, el = document.getElementById("merchantList");
+    var count = +s.payrix_merchants || 0, ps = s.payrix || null;
+    if (!count) {
+      document.getElementById("merchantNote").textContent = "";
+      el.innerHTML = '<div class="panel-empty">Payrix merchant data isn’t loaded yet' +
+        (ps && ps.error ? ' (last try: ' + escapeHtml(ps.error) + ')' : '') + '. Tickets will show their merchant here once the Payrix sync runs.</div>';
+      return;
+    }
+    var rows = [];
+    ROWS.forEach(function (r) { merchantsOf(r).forEach(function (x) { rows.push({ r: r, id: x[0], m: x[1], p: merchantProblem(x[1]) }); }); });
+    rows.sort(function (a, b) { return (b.p ? 1 : 0) - (a.p ? 1 : 0) || b.r[RC.hours] - a.r[RC.hours]; });
+    var matched = {}; rows.forEach(function (x) { matched[x.r[RC.id]] = 1; });
+    var nMatched = Object.keys(matched).length, nBad = rows.filter(function (x) { return x.p; }).length;
+    var synced = ps && ps.finished ? " · Payrix synced " + ptDayFmt.format(new Date(ps.finished)) + " " + fmtClock(Date.parse(ps.finished)) : "";
+    document.getElementById("merchantNote").textContent = nMatched + " of " + ROWS.length + " open tickets matched to a Payrix merchant · " +
+      nBad + (nBad === 1 ? " needs" : " need") + " a look" + synced;
+    if (!rows.length) { el.innerHTML = '<div class="panel-empty">None of the open tickets matched a Payrix merchant by organization name or email.</div>'; return; }
+    el.innerHTML = '<div class="table-wrap"><table class="call-table"><thead><tr><th>Ticket</th><th>Organization</th><th>Payrix merchant</th><th>Status</th><th>Last activity</th><th>Approved sales</th></tr></thead><tbody>' +
+      rows.map(function (x) {
+        var m = x.m, idle = merchantIdleDays(m);
+        var st = x.p ? '<span class="chip chip-merchant-bad">' + escapeHtml(x.p) + '</span>' : '<span class="chip chip-merchant">' + escapeHtml(MERCHANT_STATUS[m[2]] || "status " + m[2]) + '</span>';
+        if (m[5]) st += '<div class="review-by">' + escapeHtml(m[5]) + '</div>';
+        return '<tr' + (x.p ? ' style="background:var(--critical-soft)"' : '') + '><td>' + ticketLink(x.r) + '<div class="review-by">' + escapeHtml(STATUS_LABEL[x.r[RC.status]] || x.r[RC.status]) + '</div></td>' +
+          '<td>' + escapeHtml(x.r[RC.org] || x.r[RC.requester]) + '</td>' +
+          '<td>' + escapeHtml(merchantName(m)) + (m[1] && m[1] !== m[0] ? '<div class="review-by">' + escapeHtml(m[1]) + '</div>' : '') + '</td>' +
+          '<td>' + st + '</td>' +
+          '<td>' + (m[6] ? escapeHtml(merchantDay(m[6])) + '<div class="review-by">' + Math.round(idle) + 'd ago</div>' : '<span class="review-by">none</span>') + '</td>' +
+          '<td style="font-variant-numeric:tabular-nums;">' + (m[7] === null || m[7] === undefined ? "n/a" : "$" + fmtNum(m[7] / 100)) + '</td></tr>';
+      }).join("") + '</tbody></table></div>';
+  }
+
+  // ---- Wiring ----
+  // One function so a "recheck" click re-renders every section a ticket might appear in.
+  function renderAll() {
+    derive();
+    renderKPIs();
+    renderPayrixSection();
+    renderProcessorSection();
+    renderTierChart();
+    renderAssigneeChart();
+    renderBackforthAssigneeChart();
+    renderEsSection();
+    renderGalSection();
+    renderMerchantSection();
+    renderStatusChart();
+    renderReasonChart();
+    renderDetailChart();
+    renderGroupChart();
+    renderSuggestions();
+    renderTable();
+    renderTrendChart();
+  }
+
+  // =====================================================================================
+  // Hosted board: sign-in, refresh
+  // =====================================================================================
+  var TZ = "America/Los_Angeles";
+  // No live queue on this board, so it refreshes every 15 minutes and only while the tab is visible.
+  var REFRESH_MS = 15 * 60 * 1000;
+  var fetchedAt = 0;
+  var ptFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" });
+  var ptDayFmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short", month: "numeric", day: "numeric" });
+  function fmtClock(ms) { return ptFmt.format(new Date(ms)) + " PT"; }
+  function setStatus(msg, bad) {
+    document.getElementById("genDate").textContent = msg;
+    document.getElementById("liveDot").className = "snapshot-dot " + (bad ? "stale" : "live");
+  }
+
+  // ---- load and refresh ----
+  var renderPending = false;
+  function typing() { var a = document.activeElement; return !!(a && a.closest && a.closest("#board") && /^(INPUT|TEXTAREA)$/.test(a.tagName) && a.type === "text"); }
+  function apply() {
+    NOW = Date.now();
+    ROWS = buildRows(DATA.tickets || []);
+    HISTORY = (DATA.history || []).map(function (h) { return [Date.parse(h[0]), h[1], h[2], h[3], h[4], h[5], h[6] || 0, h[7] || 0]; });
+    ES_ROWS = buildEsRows(DATA.es || [], DATA.es_links || {}, ROWS);
+    REVIEW_RULE = {};
+    ROWS.forEach(function (r) { if (r[RC.gal] || r[RC.flagBackforth] || r[RC.payrixEsc]) REVIEW_RULE[String(r[RC.id])] = "week"; });
+    ES_ROWS.forEach(function (e) { REVIEW_RULE["jira:" + e[ES_RC.key]] = "day"; });
+    GENERATED_AT = fmtClock(fetchedAt);
+    // Don't redraw the ticket sections while someone is typing a note (it would drop their cursor).
+    if (typing()) renderPending = true; else { renderPending = false; renderAll(); }
+    var s = DATA.sync || {}, zdAge = s.zd ? (Date.now() - Date.parse(s.zd)) / 60000 : null;
+    setStatus("Updated " + fmtClock(fetchedAt) + (s.zd ? " · tickets synced " + fmtClock(Date.parse(s.zd)) : "") +
+      (s.jira ? " · ES synced " + fmtClock(Date.parse(s.jira)) : "") + " · refreshes every 15 min", zdAge !== null && zdAge > 15);
+  }
+  document.addEventListener("focusout", function () { setTimeout(function () { if (renderPending && !typing()) { renderPending = false; renderAll(); } }, 0); });
+  var loading = false;
+  function load() {
+    if (loading) return; loading = true;
+    BQEBoard.api(BOARD).then(function (j) {
+      fetchedAt = Date.now(); DATA = j; VIEWER = j.viewer; REVIEWS = j.reviews || {};
+      apply();
+    }).catch(function (e) {
+      setStatus("Couldn't refresh (" + e.message + "). Showing the last data.", true);
+    }).then(function () { loading = false; });
+  }
+  // Coming back to a tab whose data is older than the refresh interval loads it right away.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && DATA && Date.now() - fetchedAt >= REFRESH_MS) load();
+  });
+
+  // ---- theme ----
+  var THEME_KEY = "bqeBoards.theme";
+  function applyTheme(t) { if (t) document.documentElement.setAttribute("data-theme", t); else document.documentElement.removeAttribute("data-theme"); }
+  try { applyTheme(localStorage.getItem(THEME_KEY)); } catch (e) {}
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var t = cur === "dark" ? "light" : "dark";
+    applyTheme(t); try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
+  });
+
+  // ---- sign-in, who's viewing ----
+  var refreshTimer = null;
+  function showSignin(msg) {
+    clearInterval(refreshTimer); refreshTimer = null;
+    document.getElementById("board").hidden = true;
+    document.getElementById("topbar").hidden = true;
+    document.getElementById("signin").hidden = false;
+    document.getElementById("signinMsg").textContent = msg || "";
+  }
+  function renderViewers(people) {
+    document.getElementById("viewers").innerHTML = people.map(function (p) {
+      return '<span class="viewer-dot' + (p.me ? " me" : "") + '" title="' + escapeHtml(p.name + (p.me ? " (you)" : "")) + '">' + escapeHtml(p.initials) + '</span>';
+    }).join("");
+  }
+  document.getElementById("signInBtn").addEventListener("click", function () {
+    document.getElementById("signinMsg").textContent = "";
+    BQEBoard.signIn().catch(function (e) { showSignin(e.message); });
+  });
+  document.getElementById("signOutBtn").addEventListener("click", function () { BQEBoard.signOut(); });
+  // ---- Arrange: each person's section order, saved on the server so it follows them (bqe-board.js) ----
+  var layout = null;
+  document.getElementById("arrangeBtn").addEventListener("click", function () {
+    if (!layout) return;
+    var on = layout.toggle();
+    this.textContent = on ? "Done" : "Arrange";
+    this.setAttribute("aria-pressed", String(on));
+    document.getElementById("resetLayoutBtn").hidden = !on;
+  });
+  document.getElementById("resetLayoutBtn").addEventListener("click", function () { if (layout) layout.reset(); });
+  BQEBoard.start({
+    board: BOARD,
+    onSignIn: showSignin,
+    onReady: function (v) {
+      VIEWER = v;
+      document.getElementById("signin").hidden = true;
+      document.getElementById("board").hidden = false;
+      document.getElementById("topbar").hidden = false;
+      document.getElementById("viewerName").innerHTML = "Viewing: <b>" + escapeHtml(v.name) + "</b>";
+      BQEBoard.presence(renderViewers);
+      if (!layout) layout = BQEBoard.arrange(document.getElementById("board"));
+      load();
+      if (!refreshTimer) refreshTimer = setInterval(function () { if (document.visibilityState === "visible") load(); }, REFRESH_MS);
+    }
+  });
+
+  // ---- pick up a newly published version of this page (checked every 5 min, never while typing) ----
+  var pageHash = null;
+  function hashText(s) { return crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)).then(function (b) { return Array.from(new Uint8Array(b)).join(","); }); }
+  function checkVersion() {
+    if (!window.crypto || !crypto.subtle || location.protocol === "file:") return;
+    fetch(location.pathname, { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : null; }).then(function (t) {
+      if (!t) return;
+      return hashText(t).then(function (h) { if (pageHash === null) pageHash = h; else if (h !== pageHash && !typing()) location.reload(); });
+    }).catch(function () {});
+  }
+  checkVersion();
+  setInterval(checkVersion, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
