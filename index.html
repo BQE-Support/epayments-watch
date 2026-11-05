@@ -410,7 +410,9 @@
       </div>
       <div class="panel" style="margin-top:12px;">
         <div class="esc-tiles" id="riskTiles"></div>
-        <div style="margin-top:16px;"><div class="kpi-label" id="riskListLabel" style="scroll-margin-top:16px;">Merchants to look at, highest score first</div><div id="riskList" style="margin-top:6px;"></div></div>
+        <div style="margin-top:14px;"><input type="search" id="riskSearch" class="review-note-input" autocomplete="off" aria-label="Search merchants by company name, DBA or MID"
+          placeholder="Search company name, DBA or MID (partials work)" style="width:100%; max-width:440px;"></div>
+        <div style="margin-top:16px;"><div class="kpi-label" id="riskListLabel" style="scroll-margin-top:16px;">Merchants to look at, highest score first</div><div id="riskList" style="margin-top:6px;"></div><div id="riskOther"></div></div>
         <details class="review-history" id="riskLowWrap" style="margin-top:16px;">
           <summary id="riskLowSummary">Lower scores</summary>
           <div id="riskLow" style="margin-top:8px;"></div>
@@ -688,7 +690,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.6</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.8</footer>
     </div>
   </div>
 </div>
@@ -1708,6 +1710,7 @@
       (rc[2] ? '<div class="review-by">' + money(rc[2]) + ' in progress</div>' : '') || '<span class="review-by">none bounced</span>';
     return '<div class="ticket-item' + (rv.reviewed ? " reviewed" : "") + '">' +
       '<div class="ticket-item-head"><strong>' + escapeHtml(x[1] || x[0]) + '</strong>' +
+        (mlistIdx()[x[0]] && mlistIdx()[x[0]][2] && searchKey(mlistIdx()[x[0]][2]) !== searchKey(x[1]) ? '<span class="review-by">' + escapeHtml(mlistIdx()[x[0]][2]) + '</span>' : '') +
         '<span class="flags-cell"><span class="chip ' + (tier === "High" ? "chip-merchant-bad" : tier === "Watch" ? "chip-awaiting" : "chip-group") + '">' + tier + ' &middot; ' + x[2] + '</span>' +
         (isNew ? ' <span class="chip chip-es">New, boarded ' + fmtDay(String(x[10]).slice(0, 10)) + '</span>' : '') +
         (st[2] ? ' <span class="chip chip-merchant-bad">Frozen</span>' : '') + (st[1] || st[0] === 4 ? ' <span class="chip chip-group">Closed/inactive</span>' : '') + '</span></div>' +
@@ -1736,7 +1739,23 @@
         riskCell("Merchant", '<span class="review-by">' + escapeHtml(x[0]) + '</span>') +
       '</div>' + reviewControlsHtml(id, rv) + '</div>';
   }
+  // Search (2026-11-05): company (entity) name, DBA or MID, partial and case-insensitive; every word must match.
+  // Punctuation is ignored, so "smith and jones" finds "Smith & Jones, P.C." and "6a5fec" finds the MID.
+  var RISK_QUERY = "", MLIST_IDX = null;
+  var STATUS_NAME = { 0: "not ready", 1: "ready", 2: "boarded", 3: "manual", 4: "closed", 5: "incomplete", 6: "pending" };
+  function searchKey(t) { return String(t || "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim(); }
+  function mlistIdx() {
+    if (!MLIST_IDX) { MLIST_IDX = {}; ((DATA && DATA.mlist) || []).forEach(function (m) { MLIST_IDX[m[0]] = m; }); }
+    return MLIST_IDX;
+  }
+  function riskMatches(id, dba, company) {
+    var words = searchKey(RISK_QUERY).split(" ").filter(Boolean);
+    if (!words.length) return true;
+    var hay = searchKey(id + " " + (dba || "") + " " + (company || "")), tight = hay.replace(/ /g, "");
+    return words.every(function (w) { return hay.indexOf(w) !== -1 || tight.indexOf(w) !== -1; });
+  }
   function renderRiskSection() {
+    MLIST_IDX = null;
     var rows = (DATA && DATA.risk) || [];
     var high = rows.filter(function (x) { return x[2] >= 6; }), watch = rows.filter(function (x) { return x[2] >= 3 && x[2] < 6; });
     var owed = rows.filter(function (x) { return x[4] && x[4][3] < 0; });
@@ -1769,11 +1788,26 @@
       (ach && ach.finished ? " · ACH synced " + ptDayFmt.format(new Date(ach.finished)) + " " + fmtClock(Date.parse(ach.finished)) : ach && ach.error ? " · ACH sync failed: " + ach.error : "");
     var top = high.concat(watch), low = rows.filter(function (x) { return x[2] < 3; });
     var listFilter = filterSets[RISK_FILTER], recFilter = RISK_FILTER === "inflight" ? inflight : RISK_FILTER === "bounced" ? bounced : null;
-    var shown = listFilter || top;
-    document.getElementById("riskListLabel").textContent = listFilter ? filterLabel[RISK_FILTER] + ": " + shown.length + " merchant" + (shown.length === 1 ? "" : "s") : "Merchants to look at, highest score first";
+    var shown = listFilter || top, searching = !!searchKey(RISK_QUERY), idx = mlistIdx();
+    if (searching) shown = (listFilter || rows).filter(function (x) { return riskMatches(x[0], x[1], idx[x[0]] && idx[x[0]][2]); });
+    document.getElementById("riskListLabel").textContent = searching ? "Search \u201c" + RISK_QUERY.trim() + "\u201d" + (listFilter ? " in " + filterLabel[RISK_FILTER] : "") + ": " + shown.length + " merchant" + (shown.length === 1 ? "" : "s") + " with risk signals"
+      : listFilter ? filterLabel[RISK_FILTER] + ": " + shown.length + " merchant" + (shown.length === 1 ? "" : "s") : "Merchants to look at, highest score first";
     document.getElementById("riskList").innerHTML = recFilter ? clearHtml + '<div class="panel-empty">Showing ' + filterLabel[RISK_FILTER].toLowerCase() + ' in the recoveries list below.</div>'
-      : clearHtml + (shown.length ? shown.map(riskItemHtml).join("") : '<div class="panel-empty">' + (listFilter ? "No merchants in this group right now." : "No merchant scores 3 or more right now.") + '</div>');
-    document.getElementById("riskLowWrap").style.display = RISK_FILTER ? "none" : "";
+      : clearHtml + (shown.length ? shown.map(riskItemHtml).join("") : '<div class="panel-empty">' + (searching ? "No merchant with risk signals matches." : listFilter ? "No merchants in this group right now." : "No merchant scores 3 or more right now.") + '</div>');
+    document.getElementById("riskLowWrap").style.display = RISK_FILTER || searching ? "none" : "";
+    // Matches with no risk signals: every other Payrix merchant, so a lookup by name or MID always answers.
+    var other = [];
+    if (searching && !listFilter) {
+      var inRisk = {}; rows.forEach(function (x) { inRisk[x[0]] = 1; });
+      other = ((DATA && DATA.mlist) || []).filter(function (m) { return !inRisk[m[0]] && riskMatches(m[0], m[1], m[2]); });
+    }
+    document.getElementById("riskOther").innerHTML = !other.length ? "" :
+      '<div class="kpi-label" style="margin-top:16px;">Other matches, no risk signals: ' + other.length + (other.length > 50 ? " (first 50 shown)" : "") + '</div>' +
+      '<div class="table-wrap" style="margin-top:6px;"><table class="call-table"><thead><tr><th>DBA</th><th>Company</th><th>MID</th><th>Status</th><th>Boarded</th><th>Open tickets</th></tr></thead><tbody>' +
+      other.slice(0, 50).map(function (m) {
+        return '<tr><td>' + escapeHtml(m[1] || "") + '</td><td>' + escapeHtml(m[2] || "") + '</td><td class="review-by">' + escapeHtml(m[0]) + '</td>' +
+          '<td>' + escapeHtml((STATUS_NAME[m[3]] || m[3] || "") + (m[4] ? ", inactive" : "")) + '</td><td>' + fmtDay(String(m[5] || "").slice(0, 10)) + '</td><td>' + ticketsForMerchant(m[0]) + '</td></tr>';
+      }).join("") + '</tbody></table></div>';
     document.getElementById("riskLowSummary").textContent = "Lower scores (1 to 2, or a negative balance covered by reserve): " + low.length;
     document.getElementById("riskLow").innerHTML = low.length ? low.map(riskItemHtml).join("") : '<div class="panel-empty">None.</div>';
     var order = function (d) { return d[4] === 2 || d[4] === 1 ? 0 : d[4] >= 4 ? 1 : 2; };
@@ -1790,7 +1824,12 @@
           '<td>' + (d[1] ? ticketsForMerchant(d[1]) : '') + '</td></tr>';
       }).join("") + '</tbody></table>' : '<div class="panel-empty">No debit recoveries ' + (recFilter ? "in this group" : "in the last 120 days") + '.</div>');
   }
-  var RISK_FILTER = null;
+  var RISK_FILTER = null, riskSearchTimer = null;
+  document.addEventListener("input", function (e) {
+    if (!e.target || e.target.id !== "riskSearch") return;
+    clearTimeout(riskSearchTimer);
+    riskSearchTimer = setTimeout(function () { RISK_QUERY = e.target.value || ""; renderRiskSection(); }, 150);
+  });
   document.addEventListener("click", function (e) {
     var t = e.target.closest("[data-risk-filter]");
     if (!t) return;
