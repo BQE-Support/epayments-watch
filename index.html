@@ -612,8 +612,8 @@
           <ul>
             <li>Built from the Legendary Kitchens case (ZD 749403): a merchant boarded in July ran 74 large ACH payments from 65 payer accounts in three weeks, 57 came back returned (32 as R29, "not authorized"), the money had already been paid out, Payrix's debit recovery bounced and the balance went negative. Each signal below is one of those steps.</li>
             <li>Points: owes money (Payrix balance total of -$500 or less, reserve and pending included) 3, or 1 if under $500; a debit recovery failed, was denied or bounced in 120 days 3; 2+ unauthorized ACH returns in 60 days (R05, R07, R10, R11, R29, R51) 3; 3+ returns in 60 days worth 10%+ of lifetime approved sales 2; boarded in the last 180 days with $50,000+ of $5k+ payments in 30 days 2; boarded in 180 days with 10+ payer bank accounts on $5k+ ACH in 30 days 2; 5+ $5k+ payments from a company-named payer entered as personal checking 1; a Zendesk ticket in 60 days about MFA, 2FA, a lost phone, a login email change or a new admin 1.</li>
-            <li>Other schemes (added in 1.4): bank account changed in 60 days 1, or 2 for 2+ changes (payout diversion); a bank change plus an account-security ticket 2 more (account takeover); 10+ failed card payments in 7 days or 5+ in a day 2 (card testing); card refunds of $5,000+ in 30 days 1, $25,000+ 2 (refund fraud); 2+ disputes in 120 days 2, one open dispute 1; a payment 5x the average ticket declared at boarding, or 30-day volume 3x the declared monthly card sales 2 (bust-out); a payer bank account that also paid another merchant 2 (mule accounts); 3+ payments from one payer account in a day 1 (splitting); active again after 90+ idle days 1 (reactivated account).</li>
-            <li>Payrix has no per-merchant transaction limits set: on 2026-11-05 its only limit rules were two BQE-wide caps on failed card authorizations (5 and 10 an hour). The card shows what the merchant declared at boarding instead (average ticket, annual card sales) and compares it with what they actually run.</li>
+            <li>Other schemes (added in 1.4): bank account changed in 60 days 1, or 2 for 2+ changes (payout diversion); a bank change plus an account-security ticket 2 more (account takeover); 10+ failed card payments in 7 days or 5+ in a day 2 (card testing); card refunds of $5,000+ in 30 days 1, $25,000+ 2 (refund fraud); any open dispute 3, or 2+ disputes in 120 days 2; a payment 5x the profile's Average Transaction Amount, or 30-day volume 3x a month of its Annual Processing Volume 2 (bust-out); a payer bank account that also paid another merchant 2 (mule accounts); 3+ payments from one payer account in a day 1 (splitting); active again after 90+ idle days 1 (reactivated account).</li>
+            <li>Merchant limits are the Annual Processing Volume and Average Transaction Amount on each merchant profile in the ePayments portal (Business tab). The card shows both and compares them with what the merchant actually runs. Payrix does not hold or block payments above them: its only limit rules on 2026-11-05 were two BQE-wide caps on failed card authorizations (5 and 10 an hour).</li>
             <li>Bank account "changes" are Payrix's modified time on the merchant's bank account record. Payrix also bumps it for edits that aren't a new account number, so a single change is only Info until something else lines up with it.</li>
             <li>High = 6+, Watch = 3 to 5. Lower scores, and negative available balances that the reserve covers, are folded underneath. A covered negative is not money owed: the merchant portal's "Account Balance" shows available only.</li>
             <li>Support contact checks for an ePayments ticket (ePayment Team group or ePayments module) for the merchant's organization since the balance went negative or the first return in the window. "No ticket" means nobody has reached out.</li>
@@ -687,7 +687,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.4</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.5</footer>
     </div>
   </div>
 </div>
@@ -1676,7 +1676,7 @@
     owed: "Owes money", recovery: "Recovery bounced", unauth: "Unauthorized returns", rate: "High return rate",
     newbig: "New + large payments", payers: "Many payer accounts", personal: "Business on personal acct", sec: "Account-security ticket",
     bank: "Bank account changed", takeover: "Takeover pattern", cardtest: "Card testing", refund: "Large refunds",
-    dispute: "Disputes", declared: "Over declared volume", shared: "Payer account shared", split: "Split payments", react: "Reactivated"
+    dispute: "Disputes", declared: "Over merchant limits", shared: "Payer account shared", split: "Split payments", react: "Reactivated"
   };
   function monthsSince(d) { var m = (NOW - Date.parse(String(d).slice(0, 10) + "T12:00:00Z")) / (86400000 * 30.44); return m < 1 ? Math.round(m * 30.44) + " days" : m < 24 ? (Math.round(m * 10) / 10) + " months" : (Math.round(m / 1.2) / 10) + " years"; }
   var RECOVERY_STATUS = { 1: "requested", 2: "processing", 3: "processed", 4: "failed", 5: "denied", 6: "returned" };
@@ -1717,8 +1717,8 @@
         riskCell("Support contact", c.html) +
         riskCell("Lifetime approved", (x[11] === null || x[11] === undefined ? "n/a" : money(x[11])) +
           (x[10] ? '<div class="review-by">since boarding ' + fmtDay(String(x[10]).slice(0, 10)) + ' (' + monthsSince(x[10]) + ')</div>' : '')) +
-        riskCell("Declared at boarding", dec && (dec[0] || dec[1]) ? 'avg ticket ' + money(dec[0]) + '<div class="review-by">annual card sales ' + money(dec[1]) +
-          (ach && dec[0] > 0 && ach[2] >= 5 * dec[0] ? '; max payment is <span style="color:var(--critical);font-weight:700;">' + Math.round(ach[2] / dec[0]) + 'x</span> the avg ticket' : '') + '</div>' : '<span class="review-by">not declared</span>') +
+        riskCell("Merchant limits (profile)", dec && (dec[0] || dec[1]) ? 'avg transaction ' + money(dec[0]) + '<div class="review-by">annual processing volume ' + money(dec[1]) +
+          (ach && dec[0] > 0 && ach[2] >= 5 * dec[0] ? '; max payment is <span style="color:var(--critical);font-weight:700;">' + Math.round(ach[2] / dec[0]) + 'x</span> the avg transaction' : '') + '</div>' : '<span class="review-by">not set</span>') +
         riskCell("Security tickets, 60d", x[8] ? zdLink(x[8][1]) + (x[8][0] > 1 ? ' +' + (x[8][0] - 1) : '') : '<span class="review-by">none</span>') +
         riskCell("Bank account, 60d", x[14] ? x[14][0] + ' change' + (x[14][0] === 1 ? '' : 's') + '<div class="review-by">last ' + fmtDay(String(x[14][1]).slice(0, 10)) + '</div>' : '<span class="review-by">no change</span>') +
         riskCell("Failed cards", x[15] ? fmtNum(x[15][0]) + ' in 7d<div class="review-by">most in one day: ' + fmtNum(x[15][1]) + '</div>' : '<span class="review-by">none</span>') +
@@ -1736,6 +1736,8 @@
     var owed = rows.filter(function (x) { return x[4] && x[4][3] < 0; });
     var owedSum = owed.reduce(function (s, x) { return s + x[4][3]; }, 0);
     var noContact = rows.filter(function (x) { return x[2] >= 3 && !riskContact(x).ok; });
+    // open dispute, or 2+ disputes in 120 days (Fred, 2026-11-05: the board must flag disputes)
+    var disputed = rows.filter(function (x) { return x[17] && (x[17][0] > 0 || x[17][1] >= 2); });
     var recs = (DATA && DATA.recoveries) || [];
     var bounced = recs.filter(function (d) { return d[4] >= 4; }), inflight = recs.filter(function (d) { return d[4] === 1 || d[4] === 2; });
     var sumAmt = function (l) { return l.reduce(function (s, d) { return s - (d[3] || 0); }, 0); };
@@ -1744,6 +1746,7 @@
       { key: "watch", label: "Watch", value: fmtNum(watch.length), sub: "score 3 to 5" },
       { key: "owed", label: "Owe money", value: fmtNum(owed.length), sub: money(-owedSum) + " not covered by reserve", crit: owedSum < -100000 },
       { key: "nocontact", label: "No Support contact", value: fmtNum(noContact.length), sub: "score 3+, no ePayments ticket since it started", crit: noContact.length > 0 },
+      { key: "disputes", label: "Disputes", value: fmtNum(disputed.length), sub: disputed.filter(function (x) { return x[17][0] > 0; }).length + " with an open dispute", crit: disputed.some(function (x) { return x[17][0] > 0; }) },
       { key: "inflight", label: "Recoveries in progress", value: fmtNum(inflight.length), sub: money(sumAmt(inflight)) },
       { key: "bounced", label: "Recoveries bounced, 120d", value: fmtNum(bounced.length), sub: money(sumAmt(bounced)), crit: bounced.some(function (d) { return (NOW - Date.parse(d[7])) / 86400000 <= 14; }) }
     ];
@@ -1752,8 +1755,8 @@
       return '<button type="button" class="q-tile' + (RISK_FILTER === t.key ? " active" : "") + '" data-risk-filter="' + t.key + '" aria-pressed="' + (RISK_FILTER === t.key) + '">' +
         '<div class="kpi-label">' + t.label + '</div><div class="kpi-value' + (t.crit ? " crit" : "") + '">' + t.value + '</div><div class="kpi-sub">' + t.sub + '</div></button>';
     }).join("");
-    var filterSets = { high: high, watch: watch, owed: owed, nocontact: noContact };
-    var filterLabel = { high: "High risk", watch: "Watch", owed: "Owe money", nocontact: "No Support contact", inflight: "Recoveries in progress", bounced: "Recoveries bounced, 120 days" };
+    var filterSets = { high: high, watch: watch, owed: owed, nocontact: noContact, disputes: disputed };
+    var filterLabel = { high: "High risk", watch: "Watch", owed: "Owe money", nocontact: "No Support contact", disputes: "Disputes", inflight: "Recoveries in progress", bounced: "Recoveries bounced, 120 days" };
     var clearHtml = RISK_FILTER ? '<div class="section-note" style="margin:0 0 8px;">Filtered: ' + filterLabel[RISK_FILTER] + ' &middot; <a href="#" data-risk-filter="">Show all</a></div>' : '';
     var s = (DATA && DATA.sync) || {}, ach = s.payrix_ach || null;
     document.getElementById("riskNote").textContent = "Payrix balances and returns hourly, large ACH every 6 hours" +
