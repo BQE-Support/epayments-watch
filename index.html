@@ -344,6 +344,9 @@
   .chip-merchant-bad { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
   .esc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
   .esc-tiles .q-tile { cursor: default; }
+  .risk-sig { display: inline-block; margin: 2px 4px 2px 0; }
+  .risk-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 14px; margin-top: 8px; font-size: 12.5px; }
+  @media (max-width: 640px) { .risk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 </head>
 <body>
@@ -397,6 +400,25 @@
     <div data-section="kpis" data-section-label="Ticket KPI tiles" style="display:flex; flex-direction:column; gap:28px;">
     <div class="kpi-grid" id="kpiGrid"></div>
     <div id="kpiDrilldownWrap"></div>
+    </div>
+
+    <div data-section="riskSection" id="riskSection">
+      <div class="section-head">
+        <h2 class="hero-title">Money owed &amp; fraud risk</h2>
+        <span class="section-note" id="riskNote"></span>
+      </div>
+      <div class="panel" style="margin-top:12px;">
+        <div class="esc-tiles" id="riskTiles"></div>
+        <div style="margin-top:16px;"><div class="kpi-label">Merchants to look at, highest score first</div><div id="riskList" style="margin-top:6px;"></div></div>
+        <details class="review-history" style="margin-top:16px;">
+          <summary id="riskLowSummary">Lower scores</summary>
+          <div id="riskLow" style="margin-top:8px;"></div>
+        </details>
+        <details class="review-history" style="margin-top:16px;">
+          <summary id="recoveriesSummary">Debit recoveries, last 120 days</summary>
+          <div class="table-wrap" style="margin-top:8px;" id="recoveriesList"></div>
+        </details>
+      </div>
     </div>
 
     <div data-section="payrixSection" id="payrixSection">
@@ -585,6 +607,17 @@
           </ul>
         </div>
         <div>
+          <h4>Money owed &amp; fraud risk</h4>
+          <ul>
+            <li>Built from the Legendary Kitchens case (ZD 749403): a merchant boarded in July ran 74 large ACH payments from 65 payer accounts in three weeks, 57 came back returned (32 as R29, "not authorized"), the money had already been paid out, Payrix's debit recovery bounced and the balance went negative. Each signal below is one of those steps.</li>
+            <li>Points: owes money (Payrix balance total of -$500 or less, reserve and pending included) 3, or 1 if under $500; a debit recovery failed, was denied or bounced in 120 days 3; 2+ unauthorized ACH returns in 60 days (R05, R07, R10, R11, R29, R51) 3; 3+ returns in 60 days worth 10%+ of lifetime approved sales 2; boarded in the last 180 days with $50,000+ of $5k+ ACH payments in 30 days 2; boarded in 180 days with 10+ payer bank accounts on $5k+ ACH in 30 days 2; 5+ $5k+ payments from a company-named payer entered as personal checking 1; a Zendesk ticket in 60 days about MFA, 2FA, a lost phone, a login email change or a new admin 1.</li>
+            <li>High = 6+, Watch = 3 to 5. Lower scores, and negative available balances that the reserve covers, are folded underneath. A covered negative is not money owed: the merchant portal's "Account Balance" shows available only.</li>
+            <li>Support contact checks for an ePayments ticket (ePayment Team group or ePayments module) for the merchant's organization since the balance went negative or the first return in the window. "No ticket" means nobody has reached out.</li>
+            <li>Large ACH payments are read only for merchants boarded in the last 180 days with activity in the last 30 (about 60), every 6 hours, to keep the Payrix and Supabase load small. A long-standing merchant can still score on balances, recoveries and returns.</li>
+            <li>A score is a reason to look, not proof of fraud. Use Reviewed and the note to record what was checked.</li>
+          </ul>
+        </div>
+        <div>
           <h4>Disputes &amp; ACH returns</h4>
           <ul>
             <li>The same lists as the Payrix portal's Notifications page, read from the Payrix API every hour (read-only). Disputes are Payrix chargebacks; "Reply by" is the portal's End Date. Closed disputes show the last 120 days.</li>
@@ -650,7 +683,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.1</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.2</footer>
     </div>
   </div>
 </div>
@@ -1628,6 +1661,97 @@
     document.getElementById("disputesHistory").innerHTML = closed.length ? disputeRows(closed, false) : '<div class="panel-empty">No closed disputes in the last 120 days.</div>';
   }
 
+  // ---- Money owed & fraud risk (ep_risk(), 2026-11-05) ----
+  // Signals come from the Legendary Kitchens case (ZD 749403): a new merchant running large ACH payments from many
+  // payer accounts, unauthorized (R29) returns, the payout already gone, the debit recovery bouncing, a negative balance.
+  // ep_board().risk rows: [0 merchant id, 1 name, 2 score, 3 points, 4 balance [avail, pending, reserved, total, first seen],
+  //  5 recovery [bad n, bad cents, open cents], 6 returns 60d [n, cents, unauth n, codes, first, last],
+  //  7 large ACH 30d [n, cents, max, accounts, payers, business-on-personal], 8 security tickets [n, newest id],
+  //  9 newest ePayments ticket [at, id], 10 boarded, 11 lifetime approved cents, 12 [status, inactive, frozen]]
+  var RISK_LABEL = {
+    owed: "Owes money", recovery: "Recovery bounced", unauth: "Unauthorized returns", rate: "High return rate",
+    newbig: "New + large ACH", payers: "Many payer accounts", personal: "Business on personal acct", sec: "Account-security ticket"
+  };
+  var RECOVERY_STATUS = { 1: "requested", 2: "processing", 3: "processed", 4: "failed", 5: "denied", 6: "returned" };
+  function riskTier(score) { return score >= 6 ? "High" : score >= 3 ? "Watch" : "Info"; }
+  function zdLink(id, label) { return '<a href="https://bqe.zendesk.com/agent/tickets/' + id + '" target="_blank" rel="noopener">' + (label || "#" + id) + '</a>'; }
+  // Support contact: the newest ePayments ticket for the merchant, judged against when the money first went wrong.
+  function riskContact(x) {
+    var started = [x[4] && x[4][4], x[6] && x[6][4]].filter(Boolean).map(function (d) { return Date.parse(String(d).length === 10 ? d + "T12:00:00Z" : d); });
+    var since = started.length ? Math.min.apply(null, started) : null;
+    var last = x[9] ? Date.parse(x[9][0]) : null;
+    if (last && (!since || last >= since - 86400000)) return { ok: true, html: zdLink(x[9][1]) + '<div class="review-by">' + fmtDay(String(x[9][0]).slice(0, 10)) + '</div>' };
+    return { ok: false, html: '<span class="chip chip-merchant-bad">No ticket' + (since ? " since " + fmtDay(new Date(since).toISOString().slice(0, 10)) : "") + '</span>' +
+      (last ? '<div class="review-by">last ' + zdLink(x[9][1]) + ' ' + fmtDay(String(x[9][0]).slice(0, 10)) + '</div>' : '') };
+  }
+  function sMoney(c) { return c < 0 ? "-" + money(-c) : money(c); }
+  function riskCell(label, body) { return '<div><div class="kpi-label">' + label + '</div>' + body + '</div>'; }
+  function riskItemHtml(x) {
+    var id = "risk:" + x[0], rv = getReview(id), pts = x[3] || {}, tier = riskTier(x[2]);
+    var sigs = Object.keys(RISK_LABEL).filter(function (k) { return pts[k] > 0; }).map(function (k) {
+      return '<span class="chip ' + (pts[k] >= 3 ? "chip-merchant-bad" : pts[k] >= 2 ? "chip-awaiting" : "chip-group") + ' risk-sig">' + RISK_LABEL[k] + ' +' + pts[k] + '</span>';
+    }).join("");
+    var b = x[4], rc = x[5], rt = x[6], ach = x[7], st = x[12] || [], c = riskContact(x);
+    var isNew = x[10] && (NOW - Date.parse(x[10])) / 86400000 <= 180;
+    var recHtml = '<span class="review-by">none</span>';
+    if (rc) recHtml = (rc[0] ? '<span style="color:var(--critical);font-weight:700;">' + rc[0] + ' bounced</span> ' + money(rc[1]) : '') +
+      (rc[2] ? '<div class="review-by">' + money(rc[2]) + ' in progress</div>' : '') || '<span class="review-by">none bounced</span>';
+    return '<div class="ticket-item' + (rv.reviewed ? " reviewed" : "") + '">' +
+      '<div class="ticket-item-head"><strong>' + escapeHtml(x[1] || x[0]) + '</strong>' +
+        '<span class="flags-cell"><span class="chip ' + (tier === "High" ? "chip-merchant-bad" : tier === "Watch" ? "chip-awaiting" : "chip-group") + '">' + tier + ' &middot; ' + x[2] + '</span>' +
+        (isNew ? ' <span class="chip chip-es">New, boarded ' + fmtDay(String(x[10]).slice(0, 10)) + '</span>' : '') +
+        (st[2] ? ' <span class="chip chip-merchant-bad">Frozen</span>' : '') + (st[1] || st[0] === 4 ? ' <span class="chip chip-group">Closed/inactive</span>' : '') + '</span></div>' +
+      '<div style="margin-top:4px;">' + (sigs || '<span class="review-by">negative available balance, covered by reserve</span>') + '</div>' +
+      '<div class="risk-grid">' +
+        riskCell("Payrix balance", b ? '<span style="font-variant-numeric:tabular-nums;' + (b[3] < 0 ? 'color:var(--critical);font-weight:700;' : '') + '">' + sMoney(b[3]) + '</span><div class="review-by">available ' + sMoney(b[0]) + ', reserve ' + money(b[2]) + '</div>' : '<span class="review-by">not negative</span>') +
+        riskCell("ACH returns, 60d", rt ? fmtNum(rt[0]) + ' &middot; ' + money(rt[1]) + '<div class="review-by">' + escapeHtml(rt[3] || "") + (rt[2] ? ' &middot; ' + rt[2] + ' unauthorized' : '') + '</div>' : '<span class="review-by">none</span>') +
+        riskCell("ACH $5k+, 30d", ach ? fmtNum(ach[0]) + ' &middot; ' + money(ach[1]) + '<div class="review-by">' + fmtNum(ach[3]) + ' payer accounts, max ' + money(ach[2]) + '</div>' : '<span class="review-by">none</span>') +
+        riskCell("Recoveries, 120d", recHtml) +
+        riskCell("Support contact", c.html) +
+        riskCell("Lifetime approved", x[11] === null || x[11] === undefined ? "n/a" : money(x[11])) +
+        riskCell("Security tickets, 60d", x[8] ? zdLink(x[8][1]) + (x[8][0] > 1 ? ' +' + (x[8][0] - 1) : '') : '<span class="review-by">none</span>') +
+        riskCell("Merchant", '<span class="review-by">' + escapeHtml(x[0]) + '</span>') +
+      '</div>' + reviewControlsHtml(id, rv) + '</div>';
+  }
+  function renderRiskSection() {
+    var rows = (DATA && DATA.risk) || [];
+    var high = rows.filter(function (x) { return x[2] >= 6; }), watch = rows.filter(function (x) { return x[2] >= 3 && x[2] < 6; });
+    var owed = rows.filter(function (x) { return x[4] && x[4][3] < 0; });
+    var owedSum = owed.reduce(function (s, x) { return s + x[4][3]; }, 0);
+    var noContact = rows.filter(function (x) { return x[2] >= 3 && !riskContact(x).ok; });
+    var recs = (DATA && DATA.recoveries) || [];
+    var bounced = recs.filter(function (d) { return d[4] >= 4; }), inflight = recs.filter(function (d) { return d[4] === 1 || d[4] === 2; });
+    var sumAmt = function (l) { return l.reduce(function (s, d) { return s - (d[3] || 0); }, 0); };
+    var tiles = [
+      { label: "High risk", value: fmtNum(high.length), sub: "score 6+", crit: high.length > 0 },
+      { label: "Watch", value: fmtNum(watch.length), sub: "score 3 to 5" },
+      { label: "Owe money", value: fmtNum(owed.length), sub: money(-owedSum) + " not covered by reserve", crit: owedSum < -100000 },
+      { label: "No Support contact", value: fmtNum(noContact.length), sub: "score 3+, no ePayments ticket since it started", crit: noContact.length > 0 },
+      { label: "Recoveries in progress", value: fmtNum(inflight.length), sub: money(sumAmt(inflight)) },
+      { label: "Recoveries bounced, 120d", value: fmtNum(bounced.length), sub: money(sumAmt(bounced)), crit: bounced.some(function (d) { return (NOW - Date.parse(d[7])) / 86400000 <= 14; }) }
+    ];
+    document.getElementById("riskTiles").innerHTML = tiles.map(function (t) {
+      return '<div class="q-tile"><div class="kpi-label">' + t.label + '</div><div class="kpi-value' + (t.crit ? " crit" : "") + '">' + t.value + '</div><div class="kpi-sub">' + t.sub + '</div></div>';
+    }).join("");
+    var s = (DATA && DATA.sync) || {}, ach = s.payrix_ach || null;
+    document.getElementById("riskNote").textContent = "Payrix balances and returns hourly, large ACH every 6 hours" +
+      (ach && ach.finished ? " · ACH synced " + ptDayFmt.format(new Date(ach.finished)) + " " + fmtClock(Date.parse(ach.finished)) : ach && ach.error ? " · ACH sync failed: " + ach.error : "");
+    var top = high.concat(watch), low = rows.filter(function (x) { return x[2] < 3; });
+    document.getElementById("riskList").innerHTML = top.length ? top.map(riskItemHtml).join("") : '<div class="panel-empty">No merchant scores 3 or more right now.</div>';
+    document.getElementById("riskLowSummary").textContent = "Lower scores (1 to 2, or a negative balance covered by reserve): " + low.length;
+    document.getElementById("riskLow").innerHTML = low.length ? low.map(riskItemHtml).join("") : '<div class="panel-empty">None.</div>';
+    var order = function (d) { return d[4] === 2 || d[4] === 1 ? 0 : d[4] >= 4 ? 1 : 2; };
+    var sorted = recs.slice().sort(function (a, b) { return order(a) - order(b) || String(b[7]).localeCompare(String(a[7])); });
+    document.getElementById("recoveriesSummary").textContent = "Debit recoveries, last 120 days: " + recs.length + " (" + inflight.length + " in progress, " + bounced.length + " bounced)";
+    document.getElementById("recoveriesList").innerHTML = sorted.length ? '<table class="call-table"><thead><tr><th>Created</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Open tickets</th></tr></thead><tbody>' +
+      sorted.map(function (d) {
+        var cls = d[4] >= 4 ? "chip-merchant-bad" : d[4] <= 2 ? "chip-awaiting" : "chip-merchant";
+        return '<tr><td>' + fmtDay(String(d[7] || "").slice(0, 10)) + '</td><td>' + (d[1] ? merchantCell(d[1]) : escapeHtml(d[2] || "unknown")) + '</td>' +
+          '<td style="font-variant-numeric:tabular-nums;">' + money(-(d[3] || 0)) + '</td><td><span class="chip ' + cls + '">' + (RECOVERY_STATUS[d[4]] || d[4]) + '</span></td>' +
+          '<td>' + (d[1] ? ticketsForMerchant(d[1]) : '') + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<div class="panel-empty">No debit recoveries in the last 120 days.</div>';
+  }
+
   // ---- From Payrix / Worldpay: requests the processor sent us (Boarding, Risk, ...) ----
   function renderProcessorSection() {
     var rows = ROWS.filter(function (r) { return r[RC.fromProcessor]; });
@@ -1703,6 +1827,7 @@
   function renderAll() {
     derive();
     renderKPIs();
+    renderRiskSection();
     renderPayrixSection();
     renderDisputesSection();
     renderProcessorSection();
