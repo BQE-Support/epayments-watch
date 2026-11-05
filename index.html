@@ -345,6 +345,7 @@
   .esc-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
   .esc-tiles .q-tile { cursor: default; }
   .risk-sig { display: inline-block; margin: 2px 4px 2px 0; }
+  #riskTiles button.q-tile { cursor: pointer; }
   .risk-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 14px; margin-top: 8px; font-size: 12.5px; }
   @media (max-width: 640px) { .risk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
@@ -409,12 +410,12 @@
       </div>
       <div class="panel" style="margin-top:12px;">
         <div class="esc-tiles" id="riskTiles"></div>
-        <div style="margin-top:16px;"><div class="kpi-label">Merchants to look at, highest score first</div><div id="riskList" style="margin-top:6px;"></div></div>
-        <details class="review-history" style="margin-top:16px;">
+        <div style="margin-top:16px;"><div class="kpi-label" id="riskListLabel" style="scroll-margin-top:16px;">Merchants to look at, highest score first</div><div id="riskList" style="margin-top:6px;"></div></div>
+        <details class="review-history" id="riskLowWrap" style="margin-top:16px;">
           <summary id="riskLowSummary">Lower scores</summary>
           <div id="riskLow" style="margin-top:8px;"></div>
         </details>
-        <details class="review-history" style="margin-top:16px;">
+        <details class="review-history" id="recoveriesWrap" style="margin-top:16px; scroll-margin-top:16px;">
           <summary id="recoveriesSummary">Debit recoveries, last 120 days</summary>
           <div class="table-wrap" style="margin-top:8px;" id="recoveriesList"></div>
         </details>
@@ -683,7 +684,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.2</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.3</footer>
     </div>
   </div>
 </div>
@@ -1723,34 +1724,58 @@
     var bounced = recs.filter(function (d) { return d[4] >= 4; }), inflight = recs.filter(function (d) { return d[4] === 1 || d[4] === 2; });
     var sumAmt = function (l) { return l.reduce(function (s, d) { return s - (d[3] || 0); }, 0); };
     var tiles = [
-      { label: "High risk", value: fmtNum(high.length), sub: "score 6+", crit: high.length > 0 },
-      { label: "Watch", value: fmtNum(watch.length), sub: "score 3 to 5" },
-      { label: "Owe money", value: fmtNum(owed.length), sub: money(-owedSum) + " not covered by reserve", crit: owedSum < -100000 },
-      { label: "No Support contact", value: fmtNum(noContact.length), sub: "score 3+, no ePayments ticket since it started", crit: noContact.length > 0 },
-      { label: "Recoveries in progress", value: fmtNum(inflight.length), sub: money(sumAmt(inflight)) },
-      { label: "Recoveries bounced, 120d", value: fmtNum(bounced.length), sub: money(sumAmt(bounced)), crit: bounced.some(function (d) { return (NOW - Date.parse(d[7])) / 86400000 <= 14; }) }
+      { key: "high", label: "High risk", value: fmtNum(high.length), sub: "score 6+", crit: high.length > 0 },
+      { key: "watch", label: "Watch", value: fmtNum(watch.length), sub: "score 3 to 5" },
+      { key: "owed", label: "Owe money", value: fmtNum(owed.length), sub: money(-owedSum) + " not covered by reserve", crit: owedSum < -100000 },
+      { key: "nocontact", label: "No Support contact", value: fmtNum(noContact.length), sub: "score 3+, no ePayments ticket since it started", crit: noContact.length > 0 },
+      { key: "inflight", label: "Recoveries in progress", value: fmtNum(inflight.length), sub: money(sumAmt(inflight)) },
+      { key: "bounced", label: "Recoveries bounced, 120d", value: fmtNum(bounced.length), sub: money(sumAmt(bounced)), crit: bounced.some(function (d) { return (NOW - Date.parse(d[7])) / 86400000 <= 14; }) }
     ];
+    // Each tile filters the list below it; a second click (or Show all) clears the filter.
     document.getElementById("riskTiles").innerHTML = tiles.map(function (t) {
-      return '<div class="q-tile"><div class="kpi-label">' + t.label + '</div><div class="kpi-value' + (t.crit ? " crit" : "") + '">' + t.value + '</div><div class="kpi-sub">' + t.sub + '</div></div>';
+      return '<button type="button" class="q-tile' + (RISK_FILTER === t.key ? " active" : "") + '" data-risk-filter="' + t.key + '" aria-pressed="' + (RISK_FILTER === t.key) + '">' +
+        '<div class="kpi-label">' + t.label + '</div><div class="kpi-value' + (t.crit ? " crit" : "") + '">' + t.value + '</div><div class="kpi-sub">' + t.sub + '</div></button>';
     }).join("");
+    var filterSets = { high: high, watch: watch, owed: owed, nocontact: noContact };
+    var filterLabel = { high: "High risk", watch: "Watch", owed: "Owe money", nocontact: "No Support contact", inflight: "Recoveries in progress", bounced: "Recoveries bounced, 120 days" };
+    var clearHtml = RISK_FILTER ? '<div class="section-note" style="margin:0 0 8px;">Filtered: ' + filterLabel[RISK_FILTER] + ' &middot; <a href="#" data-risk-filter="">Show all</a></div>' : '';
     var s = (DATA && DATA.sync) || {}, ach = s.payrix_ach || null;
     document.getElementById("riskNote").textContent = "Payrix balances and returns hourly, large ACH every 6 hours" +
       (ach && ach.finished ? " · ACH synced " + ptDayFmt.format(new Date(ach.finished)) + " " + fmtClock(Date.parse(ach.finished)) : ach && ach.error ? " · ACH sync failed: " + ach.error : "");
     var top = high.concat(watch), low = rows.filter(function (x) { return x[2] < 3; });
-    document.getElementById("riskList").innerHTML = top.length ? top.map(riskItemHtml).join("") : '<div class="panel-empty">No merchant scores 3 or more right now.</div>';
+    var listFilter = filterSets[RISK_FILTER], recFilter = RISK_FILTER === "inflight" ? inflight : RISK_FILTER === "bounced" ? bounced : null;
+    var shown = listFilter || top;
+    document.getElementById("riskListLabel").textContent = listFilter ? filterLabel[RISK_FILTER] + ": " + shown.length + " merchant" + (shown.length === 1 ? "" : "s") : "Merchants to look at, highest score first";
+    document.getElementById("riskList").innerHTML = recFilter ? clearHtml + '<div class="panel-empty">Showing ' + filterLabel[RISK_FILTER].toLowerCase() + ' in the recoveries list below.</div>'
+      : clearHtml + (shown.length ? shown.map(riskItemHtml).join("") : '<div class="panel-empty">' + (listFilter ? "No merchants in this group right now." : "No merchant scores 3 or more right now.") + '</div>');
+    document.getElementById("riskLowWrap").style.display = RISK_FILTER ? "none" : "";
     document.getElementById("riskLowSummary").textContent = "Lower scores (1 to 2, or a negative balance covered by reserve): " + low.length;
     document.getElementById("riskLow").innerHTML = low.length ? low.map(riskItemHtml).join("") : '<div class="panel-empty">None.</div>';
     var order = function (d) { return d[4] === 2 || d[4] === 1 ? 0 : d[4] >= 4 ? 1 : 2; };
-    var sorted = recs.slice().sort(function (a, b) { return order(a) - order(b) || String(b[7]).localeCompare(String(a[7])); });
-    document.getElementById("recoveriesSummary").textContent = "Debit recoveries, last 120 days: " + recs.length + " (" + inflight.length + " in progress, " + bounced.length + " bounced)";
-    document.getElementById("recoveriesList").innerHTML = sorted.length ? '<table class="call-table"><thead><tr><th>Created</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Open tickets</th></tr></thead><tbody>' +
+    var sorted = (recFilter || recs).slice().sort(function (a, b) { return order(a) - order(b) || String(b[7]).localeCompare(String(a[7])); });
+    var recDetails = document.getElementById("recoveriesWrap");
+    if (recFilter) recDetails.open = true;
+    document.getElementById("recoveriesSummary").textContent = recFilter ? filterLabel[RISK_FILTER] + ": " + recFilter.length + " of " + recs.length + " debit recoveries"
+      : "Debit recoveries, last 120 days: " + recs.length + " (" + inflight.length + " in progress, " + bounced.length + " bounced)";
+    document.getElementById("recoveriesList").innerHTML = (recFilter ? clearHtml : '') + (sorted.length ? '<table class="call-table"><thead><tr><th>Created</th><th>Merchant</th><th>Amount</th><th>Status</th><th>Open tickets</th></tr></thead><tbody>' +
       sorted.map(function (d) {
         var cls = d[4] >= 4 ? "chip-merchant-bad" : d[4] <= 2 ? "chip-awaiting" : "chip-merchant";
         return '<tr><td>' + fmtDay(String(d[7] || "").slice(0, 10)) + '</td><td>' + (d[1] ? merchantCell(d[1]) : escapeHtml(d[2] || "unknown")) + '</td>' +
           '<td style="font-variant-numeric:tabular-nums;">' + money(-(d[3] || 0)) + '</td><td><span class="chip ' + cls + '">' + (RECOVERY_STATUS[d[4]] || d[4]) + '</span></td>' +
           '<td>' + (d[1] ? ticketsForMerchant(d[1]) : '') + '</td></tr>';
-      }).join("") + '</tbody></table>' : '<div class="panel-empty">No debit recoveries in the last 120 days.</div>';
+      }).join("") + '</tbody></table>' : '<div class="panel-empty">No debit recoveries ' + (recFilter ? "in this group" : "in the last 120 days") + '.</div>');
   }
+  var RISK_FILTER = null;
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-risk-filter]");
+    if (!t) return;
+    e.preventDefault();
+    var k = t.getAttribute("data-risk-filter") || null;
+    RISK_FILTER = RISK_FILTER === k ? null : k;
+    renderRiskSection();
+    var target = RISK_FILTER === "inflight" || RISK_FILTER === "bounced" ? "recoveriesWrap" : "riskListLabel";
+    if (RISK_FILTER) document.getElementById(target).scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   // ---- From Payrix / Worldpay: requests the processor sent us (Boarding, Risk, ...) ----
   function renderProcessorSection() {
