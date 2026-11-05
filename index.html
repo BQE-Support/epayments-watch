@@ -614,7 +614,8 @@
             <li>Points: owes money (Payrix balance total of -$500 or less, reserve and pending included) 3, or 1 if under $500; a debit recovery failed, was denied or bounced in 120 days 3; 2+ unauthorized ACH returns in 60 days (R05, R07, R10, R11, R29, R51) 3; 3+ returns in 60 days worth 10%+ of lifetime approved sales 2; boarded in the last 180 days with $50,000+ of $5k+ payments in 30 days 2; boarded in 180 days with 10+ payer bank accounts on $5k+ ACH in 30 days 2; 5+ $5k+ payments from a company-named payer entered as personal checking 1; a Zendesk ticket in 60 days about MFA, 2FA, a lost phone, a login email change or a new admin 1.</li>
             <li>Other schemes (added in 1.4): bank account changed in 60 days 1, or 2 for 2+ changes (payout diversion); a bank change plus an account-security ticket 2 more (account takeover); 10+ failed card payments in 7 days or 5+ in a day 2 (card testing); card refunds of $5,000+ in 30 days 1, $25,000+ 2 (refund fraud); any open dispute 3, or 2+ disputes in 120 days 2; a payment 5x the profile's Average Transaction Amount, or 30-day volume 3x a month of its Annual Processing Volume 2 (bust-out); a payer bank account that also paid another merchant 2 (mule accounts); 3+ payments from one payer account in a day 1 (splitting); active again after 90+ idle days 1 (reactivated account).</li>
             <li>Merchant limits are the Annual Processing Volume and Average Transaction Amount on each merchant profile in the ePayments portal (Business tab). The card shows both and compares them with what the merchant actually runs. Payrix does not hold or block payments above them: its only limit rules on 2026-11-05 were two BQE-wide caps on failed card authorizations (5 and 10 an hour).</li>
-            <li>Bank account "changes" are Payrix's modified time on the merchant's bank account record. Payrix also bumps it for edits that aren't a new account number, so a single change is only Info until something else lines up with it.</li>
+            <li>A bank account change is Payrix's modified time on the merchant's bank account record, or a Payrix Risk "Bank Account Change Validation Required" ticket for the merchant (these go back before the account log started on 2026-11-05). Events within 3 days count as one change. Points: 1 change 1, 2 changes 2, 3+ changes 3.</li>
+            <li>The takeover pattern (bank change plus an account-security ticket) is skipped only when all three hold: the merchant was boarded over a year ago, there is exactly one bank change in 60 days, and a solved Bank Account Change Validation reply came from the merchant's on-file email domain (not free mail). A validated change alone is not enough: Legendary Kitchens passed validation from its own domain on 9/10.</li>
             <li>High = 6+, Watch = 3 to 5. Lower scores, and negative available balances that the reserve covers, are folded underneath. A covered negative is not money owed: the merchant portal's "Account Balance" shows available only.</li>
             <li>Support contact checks for an ePayments ticket (ePayment Team group or ePayments module) for the merchant's organization since the balance went negative or the first return in the window. "No ticket" means nobody has reached out.</li>
             <li>$5k+ payments (card and ACH) are read only for merchants boarded in the last 180 days, or reactivated in the last 30, with activity in the last 30 (about 60), every 6 hours, to keep the Payrix and Supabase load small. Failed card payments and bank account changes are read for every merchant hourly, refunds every 6 hours. A long-standing merchant can still score on balances, recoveries, returns, disputes, refunds, card testing and bank changes.</li>
@@ -687,7 +688,7 @@
     </details>
     </div>
 
-    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.5</footer>
+    <footer class="foot">BQE Software &middot; Internal &middot; ePayments Watch 1.6</footer>
     </div>
   </div>
 </div>
@@ -1671,12 +1672,14 @@
   // ep_board().risk rows: [0 merchant id, 1 name, 2 score, 3 points, 4 balance [avail, pending, reserved, total, first seen],
   //  5 recovery [bad n, bad cents, open cents], 6 returns 60d [n, cents, unauth n, codes, first, last],
   //  7 large ACH 30d [n, cents, max, accounts, payers, business-on-personal], 8 security tickets [n, newest id],
-  //  9 newest ePayments ticket [at, id], 10 boarded, 11 lifetime approved cents, 12 [status, inactive, frozen]]
+  //  9 newest ePayments ticket [at, id], 10 boarded, 11 lifetime approved cents, 12 [status, inactive, frozen], ...
+  //  21 Pendo flag [level, reasons, last checked] (see supabase/epayments_risk.sql for 13-20)]
   var RISK_LABEL = {
     owed: "Owes money", recovery: "Recovery bounced", unauth: "Unauthorized returns", rate: "High return rate",
     newbig: "New + large payments", payers: "Many payer accounts", personal: "Business on personal acct", sec: "Account-security ticket",
     bank: "Bank account changed", takeover: "Takeover pattern", cardtest: "Card testing", refund: "Large refunds",
-    dispute: "Disputes", declared: "Over merchant limits", shared: "Payer account shared", split: "Split payments", react: "Reactivated"
+    dispute: "Disputes", declared: "Over merchant limits", shared: "Payer account shared", split: "Split payments", react: "Reactivated",
+    pendo: "Pendo user pattern", ptake: "Pendo flag + bank change"
   };
   function monthsSince(d) { var m = (NOW - Date.parse(String(d).slice(0, 10) + "T12:00:00Z")) / (86400000 * 30.44); return m < 1 ? Math.round(m * 30.44) + " days" : m < 24 ? (Math.round(m * 10) / 10) + " months" : (Math.round(m / 1.2) / 10) + " years"; }
   var RECOVERY_STATUS = { 1: "requested", 2: "processing", 3: "processed", 4: "failed", 5: "denied", 6: "returned" };
@@ -1720,13 +1723,16 @@
         riskCell("Merchant limits (profile)", dec && (dec[0] || dec[1]) ? 'avg transaction ' + money(dec[0]) + '<div class="review-by">annual processing volume ' + money(dec[1]) +
           (ach && dec[0] > 0 && ach[2] >= 5 * dec[0] ? '; max payment is <span style="color:var(--critical);font-weight:700;">' + Math.round(ach[2] / dec[0]) + 'x</span> the avg transaction' : '') + '</div>' : '<span class="review-by">not set</span>') +
         riskCell("Security tickets, 60d", x[8] ? zdLink(x[8][1]) + (x[8][0] > 1 ? ' +' + (x[8][0] - 1) : '') : '<span class="review-by">none</span>') +
-        riskCell("Bank account, 60d", x[14] ? x[14][0] + ' change' + (x[14][0] === 1 ? '' : 's') + '<div class="review-by">last ' + fmtDay(String(x[14][1]).slice(0, 10)) + '</div>' : '<span class="review-by">no change</span>') +
+        riskCell("Bank account, 60d", x[14] ? x[14][0] + ' change' + (x[14][0] === 1 ? '' : 's') + '<div class="review-by">last ' + fmtDay(String(x[14][1]).slice(0, 10)) +
+          (x[14][3] ? '; validated ' + zdLink(x[14][3]) : '') + (x[14][4] ? '; takeover check skipped (validated, established, single change)' : '') + '</div>' : '<span class="review-by">no change</span>') +
         riskCell("Failed cards", x[15] ? fmtNum(x[15][0]) + ' in 7d<div class="review-by">most in one day: ' + fmtNum(x[15][1]) + '</div>' : '<span class="review-by">none</span>') +
         riskCell("Refunds, 30d", x[16] ? fmtNum(x[16][0]) + ' &middot; ' + money(x[16][1]) : '<span class="review-by">none</span>') +
         riskCell("Disputes, 120d", x[17] ? fmtNum(x[17][1]) + (x[17][0] ? '<div class="review-by">' + x[17][0] + ' open</div>' : '') : '<span class="review-by">none</span>') +
         (x[18] ? riskCell("Shared payer accounts", fmtNum(x[18][0]) + '<div class="review-by">also paid ' + escapeHtml(x[18][1] || "") + '</div>') : '') +
         (x[19] ? riskCell("Split payments", 'up to ' + x[19] + ' from one payer account in a day') : '') +
         (x[20] ? riskCell("Reactivated", fmtDay(String(x[20]).slice(0, 10)) + '<div class="review-by">after 90+ idle days</div>') : '') +
+        (x[21] ? riskCell("Pendo users (CORE logins)", '<span' + (x[21][0] === "high" ? ' style="color:var(--critical);font-weight:700;"' : '') + '>' + (x[21][0] === "high" ? "High" : "Watch") + '</span>' +
+          '<div class="review-by">' + escapeHtml(x[21][1] || "") + (x[21][2] ? '; checked ' + fmtDay(String(x[21][2]).slice(0, 10)) : '') + '</div>') : '') +
         riskCell("Merchant", '<span class="review-by">' + escapeHtml(x[0]) + '</span>') +
       '</div>' + reviewControlsHtml(id, rv) + '</div>';
   }
@@ -1736,7 +1742,7 @@
     var owed = rows.filter(function (x) { return x[4] && x[4][3] < 0; });
     var owedSum = owed.reduce(function (s, x) { return s + x[4][3]; }, 0);
     var noContact = rows.filter(function (x) { return x[2] >= 3 && !riskContact(x).ok; });
-    // open dispute, or 2+ disputes in 120 days (Fred, 2026-11-05: the board must flag disputes)
+    // open dispute, or 2+ disputes in 120 days (support lead, 2026-11-05: the board must flag disputes)
     var disputed = rows.filter(function (x) { return x[17] && (x[17][0] > 0 || x[17][1] >= 2); });
     var recs = (DATA && DATA.recoveries) || [];
     var bounced = recs.filter(function (d) { return d[4] >= 4; }), inflight = recs.filter(function (d) { return d[4] === 1 || d[4] === 2; });
