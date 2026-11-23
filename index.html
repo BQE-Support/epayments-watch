@@ -250,6 +250,18 @@
   .wr-table tr.wr-group td { color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; padding-top: 14px; }
   .wr-better { color: var(--good); } .wr-worse { color: var(--critical); } .wr-same { color: var(--ink-3); }
   .wr-foot { margin-top: 12px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+  dialog.stats-dlg { width: min(900px, calc(100vw - 32px)); }
+  .stats-select { border: 1px solid var(--border); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 4px 8px; font-size: 12px; font-family: var(--sans); }
+  .st-sub { margin: 18px 0 0; font: 400 14px/1.2 var(--serif); color: var(--ink); }
+  .st-trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-top: 10px; }
+  .st-trend { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface-alt); }
+  .st-trend .st-t-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); font-weight: 600; }
+  .st-trend .st-t-val { font: 400 18px/1.3 var(--serif); color: var(--ink); }
+  .st-trend svg { width: 100%; height: 44px; display: block; }
+  .st-trend .st-line { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+  .st-trend .st-dot { fill: var(--accent); }
+  .st-trend .st-dot-sel { fill: var(--critical); }
+  .stats-dlg td.st-muted { color: var(--ink-3); }
 
   .checkin-status { font-size: 11.5px; margin-top: 6px; }
   .checkin-status-done { color: var(--good); font-weight: 600; }
@@ -358,11 +370,36 @@
     <div class="topbar" id="topbar" hidden>
       <span class="viewers" id="viewers"></span>
       <span id="viewerName"></span>
+      <button type="button" class="top-btn" id="weekReportBtn" title="Last two complete weeks, Sunday to Saturday, with Payrix activity">Last week</button>
+      <button type="button" class="top-btn" id="statsBtn" title="Weekly ePayments support stats, Sunday to Saturday, with the week before and a trend">Stats</button>
       <button type="button" class="top-btn" id="arrangeBtn" title="Move sections around; your order is saved for you on every device">Arrange</button>
       <button type="button" class="top-btn" id="resetLayoutBtn" hidden>Reset layout</button>
       <button type="button" class="top-btn" id="themeBtn">Theme</button>
       <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
     </div>
+
+    <dialog class="week-report" id="weekReport">
+      <div class="wr-head">
+        <h2 class="section-title" id="weekReportTitle">Last week</h2>
+        <span style="display:flex; gap:8px;">
+          <button type="button" class="copy-btn" id="weekReportCopy">Copy report</button>
+          <button type="button" class="copy-btn" id="weekReportClose">Close</button>
+        </span>
+      </div>
+      <div id="weekReportBody"><div class="wr-foot">Loading&hellip;</div></div>
+    </dialog>
+
+    <dialog class="week-report stats-dlg" id="statsDlg">
+      <div class="wr-head">
+        <h2 class="section-title" id="statsTitle">Weekly stats</h2>
+        <span style="display:flex; gap:8px; align-items:center;">
+          <select id="statsWeek" class="stats-select" aria-label="Week"></select>
+          <button type="button" class="copy-btn" id="statsCopy">Copy stats</button>
+          <button type="button" class="copy-btn" id="statsClose">Close</button>
+        </span>
+      </div>
+      <div id="statsBody"><div class="wr-foot">Loading&hellip;</div></div>
+    </dialog>
 
     <div class="signin" id="signin" hidden>
       <div class="eyebrow">Support Operations &middot; ePayments</div>
@@ -1983,6 +2020,231 @@
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible" && DATA && Date.now() - fetchedAt >= REFRESH_MS) load();
   });
+
+  // ---- Last week and Stats: ep_week_report() and ep_weekly_stats() (supabase/epayments_week.sql), loaded on click ----
+  // Weeks run Sunday to Saturday, Pacific. dir: 1 = higher is better, -1 = lower is better, 0 = neutral
+  function wrDur(min) {
+    if (min === null || min === undefined) return "n/a";
+    if (min < 60) return Math.round(min) + "m";
+    if (min < 1440) return (min / 60).toFixed(1) + "h";
+    return (min / 1440).toFixed(1) + "d";
+  }
+  function wrMoney(cents) { return "$" + Math.round(cents / 100).toLocaleString(); }
+  function wrDate(s) { var p = String(s).split("-"); return Number(p[1]) + "/" + Number(p[2]); }
+  function wrVal(row, v) {
+    if (v === null || v === undefined) return "n/a";
+    if (row.fmt === "dur") return wrDur(v);
+    if (row.fmt === "pct") return v + "%";
+    if (row.fmt === "usd") return wrMoney(v);
+    return (row.signed && v > 0 ? "+" : "") + fmtNum(v);
+  }
+  function wrChange(row, cur, prev) {
+    if (cur === null || cur === undefined || prev === null || prev === undefined) return { text: "", cls: "wr-same" };
+    var d = cur - prev;
+    var cls = d === 0 || !row.dir ? "wr-same" : (d > 0) === (row.dir > 0) ? "wr-better" : "wr-worse";
+    var text = d === 0 ? "same" : row.fmt === "dur" ? (d > 0 ? "+" : "-") + wrDur(Math.abs(d)) : row.fmt === "pct" ? (d > 0 ? "+" : "") + d + " pts" :
+      row.fmt === "usd" ? (d > 0 ? "+" : "-") + wrMoney(Math.abs(d)) : (d > 0 ? "+" : "") + fmtNum(d);
+    return { text: text, cls: cls };
+  }
+  function copyText(btn, text, label) {
+    function flash(ok) { btn.textContent = ok ? "Copied!" : "Copy failed"; btn.classList.toggle("copied", ok); setTimeout(function () { btn.textContent = label; btn.classList.remove("copied"); }, 1800); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { flash(true); }).catch(function () { flash(false); });
+    else {
+      try {
+        var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        btn.closest("dialog").appendChild(ta); ta.select(); var ok = document.execCommand("copy"); ta.remove(); flash(ok);
+      } catch (err) { flash(false); }
+    }
+  }
+  function wrDlgFail(bodyId, what, e) {
+    document.getElementById(bodyId).innerHTML = '<div class="wr-foot">Could not load ' + what + ': ' + escapeHtml(String(e && e.message || e)) + '</div>';
+  }
+
+  // Last week
+  var WR_ROWS = [
+    { group: "Volume" },
+    { label: "Tickets created", get: function (w) { return w.created; }, dir: 0 },
+    { label: "Created by Payrix / Worldpay", get: function (w) { return w.created_processor; }, dir: 0 },
+    { label: "Tickets solved", get: function (w) { return w.solved; }, dir: 1 },
+    { label: "Net change (created minus solved)", get: function (w) { return w.created - w.solved; }, dir: -1, signed: true },
+    { group: "Speed (tickets solved that week)" },
+    { label: "Median first reply", get: function (w) { return w.reply_median_min; }, dir: -1, fmt: "dur" },
+    { label: "Median time to first solve", get: function (w) { return w.resolution_median_min; }, dir: -1, fmt: "dur" },
+    { label: "Solved within 24 hours", get: function (w) { return w.solved ? Math.round(w.solved_24h / w.solved * 100) : null; }, dir: 1, fmt: "pct" },
+    { group: "Payrix activity (created that week)" },
+    { label: "New disputes", get: function (w) { return w.disputes_new; }, dir: 0 },
+    { label: "Disputed amount", get: function (w) { return w.disputes_cents; }, dir: 0, fmt: "usd" },
+    { label: "ACH returns", get: function (w) { return w.returns_new; }, dir: -1 },
+    { label: "ACH returned amount", get: function (w) { return w.returns_cents; }, dir: -1, fmt: "usd" },
+    { label: "Debit recoveries started", get: function (w) { return w.recoveries_new; }, dir: 0 },
+    { label: "Recovery amount", get: function (w) { return w.recoveries_cents; }, dir: 0, fmt: "usd" },
+    { label: "Recoveries that bounced", get: function (w) { return w.recoveries_bounced; }, dir: -1 },
+    { group: "Backlog at end of week" },
+    { label: "Open tickets", get: function (w) { return w.backlog ? w.backlog.open : null; }, dir: -1 },
+    { label: "Flagged 7+ days", get: function (w) { return w.backlog ? w.backlog.stale : null; }, dir: -1 },
+    { label: "Escalated to Payrix", get: function (w) { return w.backlog ? w.backlog.payrix_esc : null; }, dir: -1 },
+    { label: "From Payrix / Worldpay", get: function (w) { return w.backlog ? w.backlog.from_processor : null; }, dir: 0 },
+    { label: "With Dev Team (GAL)", get: function (w) { return w.gal_open; }, dir: -1 }
+  ];
+  var WR = null;
+  function wrAsOf(w) {
+    if (!w.backlog) return "no snapshot";
+    return new Date(w.backlog.ts).toLocaleString("en-US", { timeZone: TZ, weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PT";
+  }
+  function renderWeekReport() {
+    var cur = WR[0], prev = WR[1];
+    document.getElementById("weekReportTitle").textContent = "Last week: " + wrDate(cur.start) + " to " + wrDate(cur.end);
+    var html = '<table class="wr-table"><thead><tr><th></th><th>' + wrDate(cur.start) + "-" + wrDate(cur.end) + '</th><th>' + wrDate(prev.start) + "-" + wrDate(prev.end) + '</th><th>Change</th></tr></thead><tbody>';
+    WR_ROWS.forEach(function (row) {
+      if (row.group) { html += '<tr class="wr-group"><td colspan="4">' + escapeHtml(row.group) + '</td></tr>'; return; }
+      var a = row.get(cur), b = row.get(prev), c = wrChange(row, a, b);
+      html += '<tr><td>' + escapeHtml(row.label) + '</td><td>' + wrVal(row, a) + '</td><td>' + wrVal(row, b) + '</td><td class="' + c.cls + '">' + c.text + '</td></tr>';
+    });
+    html += '</tbody></table><div class="wr-foot">Weeks run Sunday to Saturday, Pacific. Tickets are the ePayments set this board uses: the ePayment Team group or Module ePayments, all of them (GAL and Payrix escalations included). ' +
+      'Speed uses Zendesk calendar time for tickets solved that week; first reply is only known for ' + fmtNum(cur.reply_n) + ' of ' + fmtNum(cur.solved) + ' (' + fmtNum(prev.reply_n) + ' of ' + fmtNum(prev.solved) + ' the week before). ' +
+      'Payrix activity counts disputes, ACH returns and debit recovery disbursements by the day Payrix created them. A recovery that bounced is one Payrix could not pull back, so the merchant still owes it. ' +
+      'Backlog is the last hourly snapshot before the week ended: ' + escapeHtml(wrAsOf(cur)) + ' and ' + escapeHtml(wrAsOf(prev)) + '. ' +
+      'With Dev Team (GAL) is rebuilt from ticket created and solved times, so it is the GAL tickets open when the week ended.</div>';
+    document.getElementById("weekReportBody").innerHTML = html;
+  }
+  function weekReportText() {
+    var cur = WR[0], prev = WR[1];
+    var lines = ["ePayments tickets, week of " + wrDate(cur.start) + " to " + wrDate(cur.end) + " (vs " + wrDate(prev.start) + " to " + wrDate(prev.end) + ")"];
+    WR_ROWS.forEach(function (row) {
+      if (row.group) { lines.push("", row.group); return; }
+      var a = row.get(cur), b = row.get(prev), c = wrChange(row, a, b);
+      lines.push("- " + row.label + ": " + wrVal(row, a) + " (prior " + wrVal(row, b) + (c.text && c.text !== "same" ? ", " + c.text : "") + ")");
+    });
+    lines.push("", "Backlog as of " + wrAsOf(cur) + ".");
+    return lines.join("\n");
+  }
+  document.getElementById("weekReportBtn").addEventListener("click", function () {
+    document.getElementById("weekReport").showModal();
+    if (WR) return;
+    BQEBoard.api(BOARD + "?week=1").then(function (j) {
+      var wk = j.week_report || [];
+      if (wk.length !== 2) { document.getElementById("weekReportBody").innerHTML = '<div class="wr-foot">No weekly report is available yet.</div>'; return; }
+      WR = wk; renderWeekReport();
+    }).catch(function (e) { wrDlgFail("weekReportBody", "the report", e); });
+  });
+  document.getElementById("weekReportClose").addEventListener("click", function () { document.getElementById("weekReport").close(); });
+  document.getElementById("weekReport").addEventListener("click", function (e) { if (e.target === this) this.close(); });
+  document.getElementById("weekReportCopy").addEventListener("click", function () { if (WR) copyText(this, weekReportText(), "Copy report"); });
+
+  // Stats: one entry per complete Sunday-Saturday week, newest first
+  function stPct(x, n) { return n ? Math.round(x / n * 1000) / 10 : null; }
+  function stShare(key) { return function (w) { return stPct(w[key], w.n); }; }
+  function stCount(key) { return function (w) { return " (" + w[key] + ")"; }; }
+  var ST_ROWS = [
+    { group: "Volume" },
+    { label: "Customer tickets created", get: function (w) { return w.n; }, dir: 0, fmt: "int" },
+    { label: "Of those, solved by now", get: function (w) { return w.solved_now; }, dir: 0, fmt: "int" },
+    { group: "Where tickets came from" },
+    { label: "Payrix / Worldpay", get: stShare("processor"), extra: stCount("processor"), dir: 0, fmt: "pct" },
+    { label: "Escalated to Payrix", get: stShare("payrix_esc"), extra: stCount("payrix_esc"), dir: 0, fmt: "pct" },
+    { label: "Escalated to L3 (ES case)", get: stShare("es_linked"), extra: stCount("es_linked"), dir: 0, fmt: "pct" },
+    { group: "Speed" },
+    { label: "First reply within 4 hours", get: function (w) { return stPct(w.reply_within_4h, w.reply_n); }, extra: function (w) { return " (" + w.reply_within_4h + " of " + w.reply_n + ")"; }, dir: 1, fmt: "pct" },
+    { label: "Median first reply (calendar)", get: function (w) { return w.reply_median_min; }, dir: -1, fmt: "min" },
+    { label: "Median resolution time", get: function (w) { return w.resolution_median_h; }, dir: -1, fmt: "h" },
+    { label: "Same-day close (share of all tickets)", get: function (w) { return stPct(w.same_day, w.n); }, extra: stCount("same_day"), dir: 1, fmt: "pct" }
+  ];
+  var ST = { weeks: null, idx: 0 };
+  function stFmt(row, v) {
+    if (v === null || v === undefined) return "n/a";
+    if (row.fmt === "pct") return v.toFixed(1) + "%";
+    if (row.fmt === "min") return v.toFixed(1) + " min";
+    if (row.fmt === "h") return v.toFixed(1) + "h";
+    return fmtNum(v);
+  }
+  function stVal(row, w) { var v = row.get(w); return stFmt(row, v) + (v !== null && v !== undefined && row.extra ? row.extra(w) : ""); }
+  function stChange(row, a, b) {
+    if (a === null || a === undefined || b === null || b === undefined) return { text: "", cls: "wr-same" };
+    var d = Math.round((a - b) * 10) / 10;
+    if (d === 0) return { text: "same", cls: "wr-same" };
+    var cls = !row.dir ? "wr-same" : (d > 0) === (row.dir > 0) ? "wr-better" : "wr-worse";
+    var unit = row.fmt === "pct" ? " pts" : row.fmt === "min" ? " min" : row.fmt === "h" ? "h" : "";
+    return { text: (d > 0 ? "+" : "-") + Math.abs(d).toFixed(row.fmt === "int" ? 0 : 1) + unit, cls: cls };
+  }
+  function stWeekLabel(w) { return wrDate(w.week_start) + " to " + wrDate(w.week_end); }
+  function stSpark(label, vals, sel, fmtv) {
+    var pts = vals.map(function (v, i) { return { v: v, i: i }; }).filter(function (p) { return p.v !== null && p.v !== undefined; });
+    if (pts.length < 2) return "";
+    var mn = Math.min.apply(null, pts.map(function (p) { return p.v; })), mx = Math.max.apply(null, pts.map(function (p) { return p.v; }));
+    var W = 180, H = 44, pad = 4, span = mx - mn || 1, n = vals.length - 1 || 1;
+    function X(i) { return pad + (W - 2 * pad) * i / n; }
+    function Y(v) { return H - pad - (H - 2 * pad) * (v - mn) / span; }
+    var line = pts.map(function (p) { return X(p.i).toFixed(1) + "," + Y(p.v).toFixed(1); }).join(" ");
+    var dots = pts.map(function (p) { return '<circle class="' + (p.i === sel ? "st-dot-sel" : "st-dot") + '" cx="' + X(p.i).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="' + (p.i === sel ? 3.4 : 2) + '"></circle>'; }).join("");
+    var cur = vals[sel];
+    return '<div class="st-trend"><div class="st-t-label">' + escapeHtml(label) + '</div><div class="st-t-val">' + (cur === null || cur === undefined ? "n/a" : fmtv(cur)) + '</div>' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' + escapeHtml(label) + ' by week"><polyline class="st-line" points="' + line + '"></polyline>' + dots + '</svg></div>';
+  }
+  // Solved per agent: everyone who solved a ticket in either week, this week's solved first.
+  function stAgentTable(w, p) {
+    var rows = {}, order = [];
+    (w.agents || []).forEach(function (a) { rows[a.id] = { name: a.name, cur: a.solved, prev: null }; order.push(a.id); });
+    if (p) (p.agents || []).forEach(function (a) { if (!rows[a.id]) { rows[a.id] = { name: a.name, cur: 0, prev: a.solved }; order.push(a.id); } else rows[a.id].prev = a.solved; });
+    return order.map(function (id) { return rows[id]; });
+  }
+  function renderStats() {
+    var weeks = ST.weeks, w = weeks[ST.idx], p = weeks[ST.idx + 1] || null;
+    document.getElementById("statsTitle").textContent = "Weekly stats: " + stWeekLabel(w);
+    var html = '<table class="wr-table"><thead><tr><th></th><th>' + stWeekLabel(w) + '</th><th>' + (p ? stWeekLabel(p) : "No earlier week") + '</th><th>Change</th></tr></thead><tbody>';
+    ST_ROWS.forEach(function (row) {
+      if (row.group) { html += '<tr class="wr-group"><td colspan="4">' + escapeHtml(row.group) + '</td></tr>'; return; }
+      var a = row.get(w), b = p ? row.get(p) : null, c = stChange(row, a, b);
+      html += '<tr><td>' + escapeHtml(row.label) + '</td><td>' + escapeHtml(stVal(row, w)) + '</td><td class="st-muted">' + (p ? escapeHtml(stVal(row, p)) : "n/a") + '</td><td class="' + c.cls + '">' + c.text + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    var ag = stAgentTable(w, p);
+    if (ag.length) {
+      html += '<h3 class="st-sub">Solved per agent</h3><table class="wr-table"><thead><tr><th>Agent</th><th>Solved</th><th>Solved, prior week</th></tr></thead><tbody>';
+      ag.forEach(function (r) { html += '<tr><td>' + escapeHtml(r.name) + '</td><td>' + fmtNum(r.cur) + '</td><td class="st-muted">' + (r.prev === null ? (p ? "0" : "n/a") : fmtNum(r.prev)) + '</td></tr>'; });
+      html += '</tbody></table>';
+    }
+    var asc = weeks.slice().reverse(), sel = asc.length - 1 - ST.idx;
+    function series(fn) { return asc.map(fn); }
+    html += '<h3 class="st-sub">Trend, last ' + asc.length + ' weeks</h3><div class="st-trends">' +
+      stSpark("Tickets created", series(function (s) { return s.n; }), sel, function (v) { return fmtNum(v); }) +
+      stSpark("First reply within 4h", series(function (s) { return stPct(s.reply_within_4h, s.reply_n); }), sel, function (v) { return v.toFixed(1) + "%"; }) +
+      stSpark("Same-day close", series(function (s) { return stPct(s.same_day, s.n); }), sel, function (v) { return v.toFixed(1) + "%"; }) +
+      stSpark("Median resolution", series(function (s) { return s.resolution_median_h; }), sel, function (v) { return v.toFixed(1) + "h"; }) +
+      stSpark("From Payrix / Worldpay", series(function (s) { return stPct(s.processor, s.n); }), sel, function (v) { return v.toFixed(1) + "%"; }) +
+      stSpark("Escalated to L3", series(function (s) { return stPct(s.es_linked, s.n); }), sel, function (v) { return v.toFixed(1) + "%"; }) + '</div>';
+    html += '<div class="wr-foot">Weeks run Sunday to Saturday, Pacific, and cover tickets created that week in the ePayment Team group or with Module ePayments (group and module as they are now). ' +
+      'Solved counts and medians are as of now, so a recent week fills in as its tickets close. First reply and resolution use Zendesk calendar time, not business hours. ' +
+      'Escalated to Payrix and L3 count tickets carrying the escalated___payrix or jira_escalated tag today. Solved per agent counts tickets solved in the week by assignee, whenever they were created.</div>';
+    document.getElementById("statsBody").innerHTML = html;
+  }
+  function statsText() {
+    var weeks = ST.weeks, w = weeks[ST.idx], p = weeks[ST.idx + 1] || null;
+    var lines = ["ePayments stats, week of " + stWeekLabel(w) + (p ? " (vs " + stWeekLabel(p) + ")" : "")];
+    ST_ROWS.forEach(function (row) {
+      if (row.group) { lines.push("", row.group); return; }
+      var a = row.get(w), b = p ? row.get(p) : null, c = stChange(row, a, b);
+      lines.push("- " + row.label + ": " + stVal(row, w) + (p ? " (prior " + stVal(row, p) + (c.text && c.text !== "same" ? ", " + c.text : "") + ")" : ""));
+    });
+    var ag = stAgentTable(w, p);
+    if (ag.length) { lines.push("", "Solved per agent"); ag.forEach(function (r) { lines.push("- " + r.name + ": " + r.cur); }); }
+    return lines.join("\n");
+  }
+  document.getElementById("statsBtn").addEventListener("click", function () {
+    document.getElementById("statsDlg").showModal();
+    if (ST.weeks) return;
+    BQEBoard.api(BOARD + "?stats=1").then(function (j) {
+      var weeks = (j.weeks || []).filter(function (x) { return x && x.n !== undefined; });
+      if (!weeks.length) { document.getElementById("statsBody").innerHTML = '<div class="wr-foot">No weekly stats are available yet.</div>'; return; }
+      ST.weeks = weeks; ST.idx = 0;
+      var sel = document.getElementById("statsWeek");
+      sel.innerHTML = weeks.map(function (x, i) { return '<option value="' + i + '">' + escapeHtml(stWeekLabel(x)) + '</option>'; }).join("");
+      sel.value = "0"; renderStats();
+    }).catch(function (e) { wrDlgFail("statsBody", "the stats", e); });
+  });
+  document.getElementById("statsWeek").addEventListener("change", function () { ST.idx = Number(this.value) || 0; renderStats(); });
+  document.getElementById("statsClose").addEventListener("click", function () { document.getElementById("statsDlg").close(); });
+  document.getElementById("statsDlg").addEventListener("click", function (e) { if (e.target === this) this.close(); });
+  document.getElementById("statsCopy").addEventListener("click", function () { if (ST.weeks) copyText(this, statsText(), "Copy stats"); });
 
   // ---- theme ----
   var THEME_KEY = "bqeBoards.theme";
